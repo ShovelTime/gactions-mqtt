@@ -1,0 +1,18 @@
+    {
+        "battery": 3,
+        "client": "",
+        "clientName": "",
+        "editable":1,
+        "humidity": "",
+        "id": "",
+        "ignored": 0,
+        "keepHistory": 0,
+        "lastUpdated": 0,
+        "miscValues": {},
+        "model":"",
+        "name": "",
+        "online": "1",
+        "protocol": "fineoffset",
+        "sensorId": "8",
+        "temp": "23,7"
+    }
