@@ -1,8 +1,20 @@
-mod sensors
+pub mod sensors
 {
     use crate::devices::traits::devices::Device;
 
     use rand::{self, Rng, thread_rng};
+    use serde::{Deserialize, Serialize};
+
+
+    #[derive(Clone, Copy, Serialize, Deserialize)]
+    pub enum DeviceType
+    {
+        TempSensor,
+        LuxSensor,
+        Light
+    }
+    /*
+    #[derive(Clone)]
     pub struct LuxSensor
     {
         name: String,
@@ -30,6 +42,7 @@ mod sensors
         }
     }
 
+    #[derive(Clone)]
     pub struct Light
     {
 
@@ -56,11 +69,13 @@ mod sensors
         }
     }
 
+    #[derive(Clone)]
     pub struct TempSensor
     {
 
         name : String,
         connected : bool,
+        value: String,
         value_in: tokio::sync::watch::Receiver<String>
 
 
@@ -80,8 +95,8 @@ mod sensors
         }
 
         fn get_values(&self ) -> Option<String> {
-            let mut rng = rand::thread_rng();
-            Some(rng.gen_range(15..26).to_string())
+            self.value
         }
     }
+    */
 }

@@ -1,0 +1,28 @@
+[package]
+name = "MosGuitto-Server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+paho-mqtt = "0.12.3"
+picovoice = "3.0.2"
+actix-web = "4"
+rand = "0.8.5"
+
+
+[dependencies.pyo3]
+version = "0.20.0"
+features = ["auto-initialize"]
+
+[dependencies.tokio]
+features = ["full"]
+version = "1.21.1"
+
+[dependencies.serde_json]
+version = "1.0"
+
+[dependencies.serde]
+version = "1.0"
+features = ["derive"] 
