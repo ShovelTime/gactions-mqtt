@@ -1,4 +1,6 @@
 pub mod devices {
+    use std::ops::DivAssign;
+
     use serde::{Serialize, Deserialize};
 
     use crate::devices::sensors::sensors::DeviceType;
@@ -8,6 +10,7 @@ pub mod devices {
     #[derive(Serialize, Deserialize, Clone)]
     pub struct Device {
 
+        pub device_id: String,
         pub device_type : DeviceType,
         pub name : String,
         pub connected : bool,
@@ -15,19 +18,24 @@ pub mod devices {
         pub value: String
     }
     impl Device{
-        fn get_name(&self) -> String
+        pub fn new(device_id: String, device_type: DeviceType, name : String) -> Device
+        {
+
+            Device { device_id: device_id, device_type: device_type, name: name, connected: true, activated: true, value: String::new() }
+        }
+        pub fn get_name(&self) -> String
         {
             self.name.clone()
         }
-        fn get_activated(&self) -> bool
+        pub fn get_activated(&self) -> bool
         {
             self.activated
         }
-        fn get_connection_status(&self) -> bool
+        pub fn get_connection_status(&self) -> bool
         {
             self.connected
         }
-        fn get_value(&self) -> Option<String>
+        pub fn get_value(&self) -> Option<String>
         {
             Some(self.value.clone())
         }

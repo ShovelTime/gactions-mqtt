@@ -4,6 +4,6 @@ pub mod room {
 
     pub struct Room {
         room_name: String,
-        device_list: Vec<Box<dyn Device>>,
+        device_list: Vec<Device>,
     }
 }

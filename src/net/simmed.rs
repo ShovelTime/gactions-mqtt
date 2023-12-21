@@ -3,9 +3,10 @@ pub mod simmed
     use core::time;
     use std::thread;
 
-    use crate::{devices::traits::devices::Device, net::device_update::device_updates::MQTTDevice};
+    use crate::{devices::{traits::devices::Device, sensors::sensors::DeviceType}, net::device_update::device_updates::{MQTTDevice, MQTTUpdate}};
     use mqtt::{ConnectOptions, MessageBuilder};
     use paho_mqtt as mqtt;
+    use rand::{thread_rng, Rng};
     use serde::Serialize;
 
     pub fn simulate_devices(device_list: Vec<MQTTDevice>)
@@ -26,7 +27,35 @@ pub mod simmed
         
         loop{
             thread::sleep(time::Duration::from_secs(3));
-            
+            let mut value_updates : Vec<MQTTUpdate> = Vec::new();
+            for device in &device_list
+            {
+                let mut rng = thread_rng();
+                let new_val: u32;
+                match device.device_type
+                {
+                    DeviceType::TempSensor => {
+                        new_val = rng.gen_range(15..25);
+                    },
+                    DeviceType::LuxSensor => {
+                        new_val = rng.gen_range(100..400);
+                    },
+                    DeviceType::Light => {
+                        new_val = 1;
+                    },
+                }
+                let updated_device = MQTTUpdate{
+                    device_id: device.device_id.clone(),
+                    topic: device.topic.clone(),
+                    value: new_val.to_string(),
+                };
+                let updated_message = MessageBuilder::default()
+                .payload(bincode::serialize(&updated_device).unwrap())
+                .topic(device.topic.clone())
+                .finalize();
+                broker_conn.publish(updated_message).unwrap();
+                
+            }
         }
 
 
