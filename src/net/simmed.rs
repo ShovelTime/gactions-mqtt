@@ -4,7 +4,7 @@ pub mod simmed
     use std::thread;
 
     use crate::{devices::{traits::devices::Device, sensors::sensors::DeviceType}, net::device_update::device_updates::{MQTTDevice, MQTTUpdate}};
-    use mqtt::{ConnectOptions, MessageBuilder};
+    use mqtt::{ConnectOptions, MessageBuilder, Properties};
     use paho_mqtt as mqtt;
     use rand::{thread_rng, Rng};
     use serde::Serialize;
@@ -15,15 +15,19 @@ pub mod simmed
         let broker_conn = mqtt::Client::new("tcp://localhost:1883").unwrap();
         let conn_options : ConnectOptions = ConnectOptions::new_v5();
         let token = broker_conn.connect(conn_options).unwrap();
-
+        
+        let mut list_props = Properties::new();
+        list_props.push_string(mqtt::PropertyCode::PayloadFormatIndicator, "device_list").unwrap();
         let list_message = MessageBuilder::default()
         .qos(1)
         .retained(true)
-        .topic("device_list")
+        .topic("device_list").properties(list_props)
         .payload(bincode::serialize(&device_list).unwrap())
         .finalize();
 
         broker_conn.publish(list_message).unwrap();
+        let mut dev_props = Properties::new();
+        dev_props.push_string(mqtt::PropertyCode::PayloadFormatIndicator, "device_update").unwrap();
         
         loop{
             thread::sleep(time::Duration::from_secs(3));
@@ -50,6 +54,7 @@ pub mod simmed
                     value: new_val.to_string(),
                 };
                 let updated_message = MessageBuilder::default()
+                .properties(dev_props.clone())
                 .payload(bincode::serialize(&updated_device).unwrap())
                 .topic(device.topic.clone())
                 .finalize();

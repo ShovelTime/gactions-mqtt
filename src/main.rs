@@ -66,7 +66,7 @@ fn handle_message(client: Client, msg: RwLock<HashMap<String, Vec<Device>>>)
 
     let conn_options : ConnectOptions = ConnectOptions::new_v5();
     let server_res = client.connect(conn_options).unwrap();
-    client.subscribe_many(&["temperature", "device_list"], &[1, 0]);
+    client.subscribe_many(&["temperature", "device_list"], &[1, 0]).unwrap();
 
     while client.is_connected()
     {
@@ -76,26 +76,47 @@ fn handle_message(client: Client, msg: RwLock<HashMap<String, Vec<Device>>>)
             Ok(x) =>
             {
                 let msg = x.unwrap();
-                let mqtt_update: Result<MQTTUpdate, Box<bincode::ErrorKind>> = bincode::deserialize(&msg.payload());
-                match mqtt_update
+                let is_mqtt_update : bool;
+                let msg_type = msg.properties().get_string(paho_mqtt::PropertyCode::PayloadFormatIndicator).unwrap_or("unknown".to_string());
+                
+                match msg_type.as_str()
                 {
-                    Ok(dev_update) => update_device(dev_update),
-                    Err(_) =>
+
+                    "device_update" => {
+                        let mqtt_update: Result<MQTTUpdate, Box<bincode::ErrorKind>> = bincode::deserialize(&msg.payload());
+                        match mqtt_update
+                        {
+                            Ok(dev_list) => update_device(mqtt_update)
+
+                            Err(err) =>
+                            {
+                                println!("Unrecognized MQTT message received! Printing payload: \n\n {} \n\n {}", err.to_string() ,std::str::from_utf8(&msg.payload()).unwrap_or("PARSE FAILED"));
+                            }
+                        }
+                    /* 
+                    Ok(dev_update) => 
                     {
-                        //let device_list: Result<MQTTList, Box<bincode::ErrorKind>> = bincode::deserialize(&msg.payload()).unwrap_or_else(continue);
+                        is_mqtt_update = true;
+                        update_device(dev_update)
+                    },
+                    Err(_) => is_mqtt_update = false
+                    //let device_list: Result<MQTTList, Box<bincode::ErrorKind>> = bincode::deserialize(&msg.payload()).unwrap_or_else(continue);
+                    */
+                }
+                "device_list" =>
+                {
+                    let device_list: Result<MQTTList, Box<bincode::ErrorKind>> = bincode::deserialize(&msg.payload());
+                    match device_list
+                    {
+                        Ok(list) => update_device_list(list),
+                        Err(err) => println!("Unrecognized MQTT message received! Printing payload: \n\n {} \n\n {}", err.to_string() ,std::str::from_utf8(&msg.payload()).unwrap_or("PARSE FAILED")),
                     }
                 }
 
-                
     
                 
     
             }
-            Err(err) => 
-            {
-                println!("MQTT Server died, exiting");
-                return;
-            },
             
         } 
     }
@@ -103,7 +124,7 @@ fn handle_message(client: Client, msg: RwLock<HashMap<String, Vec<Device>>>)
 }
 
 
-fn device_list()
+fn update_device_list(devices : MQTTList)
 {
 
 }
