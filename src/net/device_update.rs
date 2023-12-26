@@ -4,7 +4,7 @@ pub mod device_updates
     use serde::{Serialize, Deserialize};
     use serde_json::{Map, Value};
 
-    use crate::devices::{traits::devices::Device, sensors::sensors::DeviceType};
+    use crate::device::{device::Device, device::DeviceType};
 
 
     #[derive(Serialize, Deserialize)]

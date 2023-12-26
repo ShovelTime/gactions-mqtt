@@ -1,16 +1,5 @@
 pub mod sensors
 {
-
-    use serde::{Deserialize, Serialize};
-
-
-    #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
-    pub enum DeviceType
-    {
-        TempSensor,
-        LuxSensor,
-        Light
-    }
     /*
     #[derive(Clone)]
     pub struct LuxSensor

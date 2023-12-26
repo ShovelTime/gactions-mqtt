@@ -1,3 +1,3 @@
 pub mod simmed;
-pub mod receiver;
+pub mod client;
 pub mod device_update;

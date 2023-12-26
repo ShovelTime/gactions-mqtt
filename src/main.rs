@@ -1,15 +1,16 @@
-use devices::traits::devices::Device;
+use device::device::Device;
 use net::{simmed::simmed::simulate_devices, device_update::device_updates::{MQTTUpdate, MQTTList}};
-use tokio::{net::TcpListener, time::error::Elapsed};
-use std::sync::{RwLock, Arc};
-use paho_mqtt::{Message, Client, ConnectOptions};
-use crate::{devices::sensors::sensors::DeviceType, net::device_update::device_updates::DeviceUpdateType};
+use tokio::{net::TcpListener, sync::broadcast::*};
+use std::{sync::{RwLock, Arc}, any::Any};
+use paho_mqtt::{Message, Client, ConnectOptions, AsyncClient};
+use crate::{device::device::DeviceType, net::device_update::device_updates::DeviceUpdateType};
 use std::{thread, collections::HashMap};
+use actix_web::{App, HttpServer, web::Data};
 
 pub mod automatisation;
 pub mod home;
 pub mod net;
-pub mod devices;
+pub mod device;
 pub mod typedef;
 
 //TODO: Fix many of the simple unwrap()s.
@@ -36,23 +37,74 @@ async fn main() {
         simulate_devices(vec!(device));
     });
 
+    /*
     let mqtt_receiver: Client = Client::new("tcp://localhost:1883").unwrap();
     let lock_recv = Arc::clone(&device_container);
     let recv_thread = thread::spawn(move || {
         handle_message(mqtt_receiver, lock_recv);
     });
+    */
+    let a_client = AsyncClient::new("tcp://localhost:1883").unwrap();
+    let dev_box: Box<dyn Any + Send + Sync> = Box::new(Arc::clone(&device_container));
+    let _ = a_client.user_data().insert(&dev_box);
+    let conn_options : ConnectOptions = ConnectOptions::new_v5();
+    a_client.set_message_callback(handle_message_async);
+    let _conn_token = a_client.connect(conn_options).await.expect("Failed to connect to MQTT Broker");
 
-    let listener = TcpListener::bind("0.0.0.0:1337").await.expect("Failed to bind Socket"); 
-    loop {
-        let conn = listener.accept().await;// replace port with something else;
-        
-    };
-
-    recv_thread.join().expect("damn rip receiver thread");
+    let listener = TcpListener::bind("").await.expect("Failed to bind Socket"); 
+    HttpServer::new(move || { 
+        App::new()
+        .app_data(Data::new(Arc::clone(&device_container)))
+    })
+    .bind("0.0.0.0:80").unwrap()
+    .run()
+    .await.expect("Failed to start HTTP Server");
 
 
 
 }
+
+
+fn handle_message_async(client: &AsyncClient, recv_message : Option<Message>)
+{
+
+    let device_lock = client.user_data().as_ref().unwrap().downcast_ref::<Arc<RwLock<HashMap<String, Vec<Device>>>>>().unwrap();
+    let Some(msg) = recv_message else {
+        println!("Received empty message!");
+        return;
+    };
+    let msg_type = msg.properties().get_string(paho_mqtt::PropertyCode::PayloadFormatIndicator).unwrap_or("unknown".to_string());
+                
+    match msg_type.as_str()
+    {
+
+        "device_update" => {
+            let mqtt_update  = serde_json::from_slice(&msg.payload());
+            match mqtt_update
+            {
+                Ok(dev_list) => update_device(dev_list, &device_lock),
+
+                Err(err) =>
+                {
+                    println!("Error Parsing Message! Printing payload: \n\n {} \n\n {}", err.to_string() ,std::str::from_utf8(&msg.payload()).unwrap_or("PARSE FAILED"));
+                }
+            }
+        }
+        "add_device" =>
+        {
+            let device_list = serde_json::from_slice(&msg.payload());
+            match device_list
+            {
+                Ok(list) => add_to_device_list(list, &device_lock),
+                Err(err) => println!("Unrecognized MQTT message received! Printing payload: \n\n {} \n\n {}", err.to_string() ,std::str::from_utf8(&msg.payload()).unwrap_or("PARSE FAILED")),
+            }
+        }
+
+        _ => println!("Error Parsing Message! Printing payload: \n\n {}", std::str::from_utf8(&msg.payload()).unwrap_or("PARSE FAILED"))
+    }
+            
+} 
+
 
 fn handle_message(client: Client, device_lock: Arc<RwLock<HashMap<String, Vec<Device>>>>)
 {

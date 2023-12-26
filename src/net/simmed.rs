@@ -3,7 +3,7 @@ pub mod simmed
     use core::time;
     use std::thread;
 
-    use crate::{devices::{traits::devices::Device, sensors::sensors::DeviceType}, net::device_update::device_updates::{MQTTUpdate, DeviceUpdateType}};
+    use crate::{device::{device::Device, device::DeviceType}, net::device_update::device_updates::{MQTTUpdate, DeviceUpdateType}};
     use mqtt::{ConnectOptions, MessageBuilder, Properties};
     use paho_mqtt as mqtt;
     use rand::{thread_rng, Rng};
@@ -15,24 +15,25 @@ pub mod simmed
         
         let broker_conn = mqtt::Client::new("tcp://localhost:1883").unwrap();
         let conn_options : ConnectOptions = ConnectOptions::new_v5();
-        let token = broker_conn.connect(conn_options).unwrap();
+        let token = broker_conn.connect(conn_options.clone()).unwrap();
+        
         
         let mut list_props = Properties::new();
-        list_props.push_string(mqtt::PropertyCode::PayloadFormatIndicator, "device_list").unwrap();
+        list_props.push_val(mqtt::PropertyCode::PayloadFormatIndicator, 1).expect("failed to add property");
+        list_props.push_string(mqtt::PropertyCode::ContentType, "add_device").expect("failed to add property");
         let list_message = MessageBuilder::default()
         .qos(1)
-        .retained(true)
-        .topic("device_list").properties(list_props)
+        .topic("add_device").properties(list_props)
         .payload(serde_json::to_vec(&device_list).unwrap())
         .finalize();
 
         broker_conn.publish(list_message).unwrap();
         let mut dev_props = Properties::new();
-        dev_props.push_string(mqtt::PropertyCode::PayloadFormatIndicator, "add_device").unwrap();
+        dev_props.push_val(mqtt::PropertyCode::PayloadFormatIndicator, 1).expect("failed to add property");
+        dev_props.push_string(mqtt::PropertyCode::ContentType, "device_update").expect("failed to add property");
         
         loop{
             thread::sleep(time::Duration::from_secs(3));
-            let mut value_updates : Vec<MQTTUpdate> = Vec::new();
             for device in &device_list
             {
                 let mut rng = thread_rng();
@@ -69,7 +70,18 @@ pub mod simmed
                         .payload(msg)
                         .topic(device.topic.clone())
                         .finalize();
-                        broker_conn.publish(updated_message).unwrap();
+
+                        match broker_conn.publish(updated_message) {
+                            Ok(_) => continue,
+                            Err(e) => {
+                                match e {
+                                    mqtt::Error::PahoDescr(_, _) => reattempt_connection(&broker_conn, conn_options.clone()).unwrap_or_else(|e| 
+                                        panic!("Failed to restablish connection! {}", e.to_string())),
+                                    _ => panic!("Man MQTT Shit broke: {}", e.to_string())
+                                }
+                            }
+                        }
+                        
                     }
                     Err(e) => {
                         println!("MQTTUpdate failed to serialize for device {}! \n {}", device.get_id() , e.to_string());
@@ -82,6 +94,18 @@ pub mod simmed
 
 
     }
+
+    fn reattempt_connection(broker_conn: &mqtt::Client, conn_options: mqtt::ConnectOptions) -> Result<(), paho_mqtt::Error> {
+        loop
+        {
+            match broker_conn.connect(conn_options.clone())
+            {
+                Ok(_) => return Ok(()),
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
 
 
 }

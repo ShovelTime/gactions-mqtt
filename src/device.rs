@@ -1,8 +1,18 @@
-pub mod devices {
+pub mod device {
 
     use serde::{Serialize, Deserialize};
 
-    use crate::{devices::sensors::sensors::DeviceType, typedef::typedef::{DeviceId, Topic}};
+    use crate::typedef::typedef::{DeviceId, Topic};
+
+
+
+    #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+    pub enum DeviceType
+    {
+        TempSensor,
+        LuxSensor,
+        Light
+    }
 
     #[derive(Serialize, Deserialize, Clone, Debug)]
     pub struct Device {
