@@ -7,15 +7,15 @@ edition = "2021"
 
 [dependencies]
 paho-mqtt = "0.12.3"
-bincode = "1.3.3"
+#bincode = "1.3.3"
 picovoice = "3.0.2"
-actix-web = "4"
+#actix-web = "4"
 rand = "0.8.5"
 
 
-[dependencies.pyo3]
-version = "0.20.0"
-features = ["auto-initialize"]
+#[dependencies.pyo3]
+#version = "0.20.0"
+#features = ["auto-initialize"]
 
 [dependencies.tokio]
 features = ["full"]

@@ -1,12 +1,10 @@
 pub mod sensors
 {
-    use crate::devices::traits::devices::Device;
 
-    use rand::{self, Rng, thread_rng};
     use serde::{Deserialize, Serialize};
 
 
-    #[derive(Clone, Copy, Serialize, Deserialize)]
+    #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
     pub enum DeviceType
     {
         TempSensor,

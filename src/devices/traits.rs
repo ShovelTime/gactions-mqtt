@@ -1,31 +1,32 @@
 pub mod devices {
-    use std::ops::DivAssign;
 
     use serde::{Serialize, Deserialize};
 
-    use crate::devices::sensors::sensors::DeviceType;
+    use crate::{devices::sensors::sensors::DeviceType, typedef::typedef::{DeviceId, Topic}};
 
-
-
-    #[derive(Serialize, Deserialize, Clone)]
+    #[derive(Serialize, Deserialize, Clone, Debug)]
     pub struct Device {
-
-        pub device_id: String,
-        pub device_type : DeviceType,
-        pub name : String,
-        pub connected : bool,
+        device_id: DeviceId,
+        pub device_type: DeviceType,
+        pub topic: Topic,
+        pub name: String,
+        pub connected: bool,
         pub activated: bool,
-        pub value: String
+        value: Option<String>,
     }
     impl Device{
-        pub fn new(device_id: String, device_type: DeviceType, name : String) -> Device
+        pub fn new(device_id: String, device_type: DeviceType, name : String, topic: Topic) -> Device
         {
 
-            Device { device_id: device_id, device_type: device_type, name: name, connected: true, activated: true, value: String::new() }
+            Device { device_id: device_id, device_type: device_type, name: name, connected: true, activated: true, value: None, topic: topic }
         }
-        pub fn get_name(&self) -> String
+        pub fn get_id(&self) -> &String
         {
-            self.name.clone()
+            &self.device_id
+        }
+        pub fn get_name(&self) -> &String
+        {
+            &self.name
         }
         pub fn get_activated(&self) -> bool
         {
@@ -35,11 +36,41 @@ pub mod devices {
         {
             self.connected
         }
-        pub fn get_value(&self) -> Option<String>
+        pub fn get_value(&self) -> &Option<String>
         {
-            Some(self.value.clone())
+            return &self.value
+        }
+        pub fn set_value(&mut self, value: Option<String>)
+        {
+            self.value = value;
         }
     }
 
-// Whether or not we are going to use a standarised type is TBD
+    impl Eq for Device {}
+
+    // When it comes to comparing devices, we only care about the device_id, as it is the only thing that is guaranteed to be unique identifier to a device.
+    impl PartialEq<String> for Device
+    {
+        fn eq(&self, other: &String) -> bool
+        {
+            self.device_id == *other
+        }
+    }
+
+    impl PartialEq<Device> for Device
+    {
+        fn eq(&self, other: &Device) -> bool
+        {
+            self.device_id == *other.device_id
+        }
+    }
+
+    impl PartialEq<&Device> for Device
+    {
+        fn eq(&self, other: &&Device) -> bool
+        {
+            self.device_id == *other.device_id
+        }
+    }
+
 }
