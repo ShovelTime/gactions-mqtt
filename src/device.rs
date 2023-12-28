@@ -46,13 +46,27 @@ pub mod device {
         {
             self.connected
         }
-        pub fn get_value(&self) -> &Option<String>
+        pub fn get_value(&self) -> Option<String>
         {
-            return &self.value
+            match &self.value {
+                Some(val) => Some(val.clone()),
+                None => None
+            }
         }
         pub fn set_value(&mut self, value: Option<String>)
         {
             self.value = value;
+        }
+        pub fn update(&mut self, new_dev: Device)
+        {
+            if new_dev == self.device_id
+            {
+                self.device_type = new_dev.device_type;
+                self.name = new_dev.name;
+                self.connected = new_dev.connected;
+                self.activated = new_dev.activated;
+                self.value = new_dev.value;
+            }             
         }
     }
 

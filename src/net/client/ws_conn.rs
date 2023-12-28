@@ -4,20 +4,29 @@ pub mod messaging{
     static TIMEOUT_DELAY : Duration = Duration::from_secs(10);
     // Open WS connection;
 
-    use std::{time::{Duration, Instant}, ops::Deref};
+    use std::{time::{Duration, Instant}, ops::Deref, collections::HashMap, sync::{RwLock, Arc}};
 
     use actix_web::web::Data;
     use actix_web_actors::ws;
     use actix::{Actor, StreamHandler, AsyncContext, ActorContext, Addr};
     use actix_web::{web, Error, HttpRequest, HttpResponse, http::StatusCode};
 
-    use crate::net::client::ws_msg::ws_msg::{WsMessage, WsMessageType};
+    use crate::{net::client::ws_msg::ws_msg::{WsMessage, WsMessageType, PayloadDeviceUpdate, PayloadGetValue}, device::device::Device};
 
     struct WsConn
     {
         hb : Instant,
-        continuation_buf : Vec<u8>
+        continuation_buf : Vec<u8>,
+        dev_hash : Arc<RwLock<HashMap<String, Vec<Device>>>>
+    }
+    
+    impl WsConn{
 
+        pub fn new(dev_hash: Arc<RwLock<HashMap<String, Vec<Device>>>>) -> WsConn
+        {
+            WsConn{hb: Instant::now(), continuation_buf: Vec::new(), dev_hash}
+            
+        }
     }
 
     impl Actor for WsConn {
@@ -65,10 +74,35 @@ pub mod messaging{
                                 Ok(wsmsg) => {
                                     match wsmsg.message_type
                                     {
-                                        WsMessageType::DEVICE_CMD => todo!(),
-                                        WsMessageType::DEVICE_UPDATE => todo!(),
+                                        WsMessageType::DEVICE_CMD => {
+                                                
+                                                } ,
+                                        WsMessageType::DEVICE_UPDATE => {
+                                            match serde_json::from_str::<PayloadDeviceUpdate>(&wsmsg.payload){
+                                                Ok(payload) => {
+                                                            let Ok(mut map) = self.dev_hash.write() else {return};
+                                                            let Some(dev) = map.get_mut(&payload.device.topic) else {return};
+                                                            let Some(tgt_dev) = dev.iter_mut().find(|d| **d == payload.device) else {return};
+                                                            tgt_dev.update(payload.device);
+
+                                                },
+                                                Err(_) => println!("Error deserializing device update!"),
+                                            }
+                                        },
                                         WsMessageType::SCENARIO_UPDATE => todo!(),
-                                        WsMessageType::VALUE_GET => todo!(),
+                                        WsMessageType::VALUE_GET => {
+                                            match serde_json::from_str::<PayloadGetValue>(&wsmsg.payload){
+                                                Ok(payload) => {
+                                                            let Ok(map) = self.dev_hash.read() else {return};
+                                                            let Some(dev) = map.get(&payload.topic) else {return};
+                                                            let Some(tgt_dev) = dev.iter().find(|d| **d == payload.device_id) else {return};
+                                                            let val = tgt_dev.get_value().unwrap_or("null".to_string());
+                                                            ctx.text(val);
+                                                            
+                                                },
+                                                Err(_) => println!("Error deserializing device update!"),
+                                            } 
+                                        },
                                         _ => ctx.text("Invalid Message Type!")
                                     }
                                 },
@@ -98,10 +132,15 @@ pub mod messaging{
     async fn ws_conn_request(
         req: HttpRequest,
         stream: web::Payload,
+        device_lock : Data<Arc<RwLock<HashMap<String, Vec<Device>>>>>,
+    
     ) -> Result<HttpResponse, Error>
     {
-        Ok(HttpResponse::new(StatusCode::OK))
+        let ws_instance = WsConn::new(device_lock.into_inner().deref().clone());
+        match ws::start(ws_instance, &req, stream)
+        {
+            Ok(res) => return Ok(res),
+            Err(_) => return Ok(HttpResponse::new(StatusCode::INTERNAL_SERVER_ERROR))
+        }
     }
-
-
 }

@@ -29,6 +29,15 @@ pub mod ws_msg
     }
 
     #[derive(Serialize, Deserialize, Debug)]
+    pub enum CommandType
+        {
+            TOGGLE,
+            ENABLE,
+            DISABLE,
+            
+        }
+
+    #[derive(Serialize, Deserialize, Debug)]
     pub struct PayloadDeviceUpdate
     {
         pub device : Device
@@ -50,6 +59,7 @@ pub mod ws_msg
     #[derive(Serialize, Deserialize, Debug)]
     pub struct PayloadGetValue
     {
+        pub topic : String,
         pub device_id : String
     }
 
