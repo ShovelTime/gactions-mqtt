@@ -56,7 +56,7 @@ async fn main() {
         App::new()
         .app_data(Data::new(Arc::clone(&device_container)))
     })
-    .bind("0.0.0.0:80").unwrap()
+    .bind("0.0.0.0:18337").expect("Failed to start Websocket Listener!")
     .run()
     .await.expect("Failed to start HTTP Server");
 

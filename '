@@ -94,7 +94,7 @@ pub mod ws_msg
     {
         fn from(str: String) -> CommandType 
         {
-            match str.as_str() 
+            match str.as_str()
                 {
                     "TOGGLE" => CommandType::TOGGLE,
                     "ENABLE" => CommandType::ENABLE,
@@ -108,13 +108,6 @@ pub mod ws_msg
     pub struct PayloadDeviceUpdate
     {
         pub device : Device
-    }
-
-    #[derive(Serialize, Deserialize, Debug)]
-    pub struct PayloadDeviceCommand
-    {
-        pub device_id : String,
-        pub command : CommandType
     }
 
     #[derive(Serialize, Deserialize, Debug)]
