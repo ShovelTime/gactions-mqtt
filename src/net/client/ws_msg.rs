@@ -1,13 +1,14 @@
 pub mod ws_msg
 {
 
-    use std::fmt::Error;
 
+    use actix::Message;
     use serde::{Serialize, Deserialize};
 
     use crate::{device::device::Device, automatisation::voice_recognition::voice_recognition::ScenarioTypes};
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Message)]
+    #[rtype(result = "Result<(), serde_json::Error>")]
     pub struct WsMessage
     {
         pub message_type : WsMessageType,

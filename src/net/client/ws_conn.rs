@@ -7,24 +7,29 @@ pub mod messaging{
     use std::{time::{Duration, Instant}, ops::Deref, collections::HashMap, sync::{RwLock, Arc}};
 
     use actix_web::web::Data;
-    use actix_web_actors::ws;
-    use actix::{Actor, StreamHandler, AsyncContext, ActorContext, Addr};
+    use actix_web_actors::ws::{self, WebsocketContext, WsResponseBuilder};
+    use actix::{Actor, StreamHandler, AsyncContext, ActorContext, Addr, SpawnHandle, Handler, WeakAddr};
     use actix_web::{web, Error, HttpRequest, HttpResponse, http::StatusCode};
+    use tokio::sync::broadcast::{Receiver, self};
 
     use crate::{net::client::ws_msg::ws_msg::{WsMessage, WsMessageType, PayloadDeviceUpdate, PayloadGetValue}, device::device::Device};
 
-    struct WsConn
+    pub struct WsConn
     {
         hb : Instant,
         continuation_buf : Vec<u8>,
-        dev_hash : Arc<RwLock<HashMap<String, Vec<Device>>>>
+        self_addr : Option<WeakAddr<Self>>,
+        dev_hash : Arc<RwLock<HashMap<String, Vec<Device>>>>,
+        conn_list : Arc<RwLock<Vec<WeakAddr<Self>>>>
+
+
     }
     
     impl WsConn{
 
-        pub fn new(dev_hash: Arc<RwLock<HashMap<String, Vec<Device>>>>) -> WsConn
+        pub fn new(dev_hash: Arc<RwLock<HashMap<String, Vec<Device>>>>, conn_list: Arc<RwLock<Vec<WeakAddr<Self>>>>) -> WsConn
         {
-            WsConn{hb: Instant::now(), continuation_buf: Vec::new(), dev_hash}
+            WsConn{hb: Instant::now(), conn_list, self_addr : None, continuation_buf: Vec::new(), dev_hash}
             
         }
     }
@@ -33,6 +38,7 @@ pub mod messaging{
         type Context = ws::WebsocketContext<Self>;
     
         fn started(&mut self, ctx: &mut Self::Context) {
+            self.self_addr = Some(ctx.address().downgrade());
             ctx.run_interval(HEARTBEAT_DELAY, |act, ctx| {
                 if Instant::now().duration_since(act.hb) > TIMEOUT_DELAY
                 {
@@ -43,6 +49,8 @@ pub mod messaging{
                 ctx.ping(b"ping");
                 
             });
+                
+            
         }
         
         fn stopped(&mut self , _: &mut Self::Context)
@@ -52,6 +60,25 @@ pub mod messaging{
         
     
     }
+    
+    impl Handler<WsMessage> for WsConn{
+        type Result = Result<(), serde_json::Error>;
+
+        fn handle(&mut self, msg: WsMessage, ctx: &mut Self::Context) -> Self::Result {
+            let res = serde_json::to_string(&msg);
+            match res{
+                Ok(msg_str) => {
+                    ctx.text(msg_str);
+                    return Ok(())
+                },
+                Err(err) => return Err(err),
+            }
+        }
+            
+   
+        
+    }
+
 
     impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsConn {
         fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
@@ -84,6 +111,8 @@ pub mod messaging{
                                                             let Some(dev) = map.get_mut(&payload.device.topic) else {return};
                                                             let Some(tgt_dev) = dev.iter_mut().find(|d| **d == payload.device) else {return};
                                                             tgt_dev.update(payload.device);
+                                                            //TODO:Inform every connected client of
+                                                            //change
 
                                                 },
                                                 Err(_) => println!("Error deserializing device update!"),
@@ -123,24 +152,49 @@ pub mod messaging{
                         ws::Message::Nop => (), // Wat
                     }
                 }
-                Err(_) => todo!(),
-            }
+                Err(err) =>
+                {
+                        match err
+                        {
+                                ws::ProtocolError::UnmaskedFrame => todo!(),
+                                ws::ProtocolError::MaskedFrame => todo!(),
+                                ws::ProtocolError::InvalidOpcode(_) => todo!(),
+                                ws::ProtocolError::InvalidLength(_) => todo!(),
+                                ws::ProtocolError::BadOpCode => todo!(),
+                                ws::ProtocolError::Overflow => todo!(),
+                                ws::ProtocolError::ContinuationNotStarted => todo!(),
+                                ws::ProtocolError::ContinuationStarted => todo!(),
+                                ws::ProtocolError::ContinuationFragment(_) => todo!(),
+                                ws::ProtocolError::Io(_) => todo!(),
+                        }
+             
+                }
         }
+
     }
+
+}
 
 
     async fn ws_conn_request(
         req: HttpRequest,
         stream: web::Payload,
-        device_lock : Data<Arc<RwLock<HashMap<String, Vec<Device>>>>>,
-    
+        device_lock : Data<Arc<RwLock<HashMap<String, Vec<Device>>>>>, 
+        ws_handler: Data<Arc<RwLock<Vec<WeakAddr<WsConn>>>>>
     ) -> Result<HttpResponse, Error>
     {
-        let ws_instance = WsConn::new(device_lock.into_inner().deref().clone());
-        match ws::start(ws_instance, &req, stream)
+        let ws_instance = WsConn::new(Arc::clone(device_lock.clone().deref()),
+            Arc::clone(ws_handler.clone().deref()));
+        let ws_conn = WsResponseBuilder::new(ws_instance, &req, stream);
+        
+        match ws_conn.start_with_addr()
         {
-            Ok(res) => return Ok(res),
+            Ok(res) => {
+                    ws_handler.write().expect("Alright, who's the funny thread that poisoned our lock, WHILE LEAVING?!").push(res.0.downgrade());
+                    return Ok(res.1);
+                },
             Err(_) => return Ok(HttpResponse::new(StatusCode::INTERNAL_SERVER_ERROR))
         }
     }
+
 }

@@ -1,5 +1,6 @@
+use actix::WeakAddr;
 use device::device::Device;
-use net::{simmed::simmed::simulate_devices, device_update::device_updates::{MQTTUpdate, MQTTList}};
+use net::{simmed::simmed::simulate_devices, device_update::device_updates::{MQTTUpdate, MQTTList}, client::ws_conn::messaging::WsConn};
 use tokio::{net::TcpListener, sync::broadcast::*};
 use std::{sync::{RwLock, Arc}, any::Any};
 use paho_mqtt::{Message, Client, ConnectOptions, AsyncClient};
@@ -19,6 +20,7 @@ pub mod typedef;
 async fn main() {
 
     let device_container : Arc<RwLock<HashMap<String, Vec<Device>>>> = Arc::new(RwLock::new(HashMap::new::<>()));
+    let conn_list : Arc<RwLock<Vec<WeakAddr<WsConn>>>> = Arc::new(RwLock::new(Vec::new()));
     
     {
         let mut device_hash = device_container.write().expect("Failed to lock device container!, this should never happen");
@@ -55,6 +57,7 @@ async fn main() {
     HttpServer::new(move || { 
         App::new()
         .app_data(Data::new(Arc::clone(&device_container)))
+        .app_data(Data::new(Arc::clone(&conn_list)))
     })
     .bind("0.0.0.0:18337").expect("Failed to start Websocket Listener!")
     .run()
@@ -108,7 +111,7 @@ fn handle_message_async(client: &AsyncClient, recv_message : Option<Message>)
 
 fn handle_message(client: Client, device_lock: Arc<RwLock<HashMap<String, Vec<Device>>>>)
 {
-
+ 
     let conn_options : ConnectOptions = ConnectOptions::new_v5();
     let _server_res = client.connect(conn_options).expect("Failed to connect to MQTT Broker");
     let msg_recv = client.start_consuming();
