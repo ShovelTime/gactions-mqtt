@@ -7,15 +7,31 @@ pub mod ws_msg
 
     use crate::{device::device::Device, automatisation::voice_recognition::voice_recognition::ScenarioTypes};
 
-    #[derive(Serialize, Deserialize, Debug, Message)]
+    #[derive(Serialize, Deserialize, Debug, Message, Clone)]
     #[rtype(result = "Result<(), serde_json::Error>")]
     pub struct WsMessage
     {
         pub message_type : WsMessageType,
         pub payload : String
     }
+    impl WsMessage
+    {
+        pub fn device_update(tgt : &Device) -> Result<WsMessage, serde_json::Error>
+        {
+            let parse_res = serde_json::to_string(tgt);
+            match parse_res{
+                Ok(dev_str) => Ok(WsMessage { 
+                    message_type: WsMessageType::DEVICE_UPDATE, 
+                    payload: dev_str }),
+                Err(err) => return Err(err),
+            }
 
-    #[derive(Serialize, Deserialize, Debug)]
+        }
+
+
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
     #[allow(non_camel_case_types)]
     pub enum WsMessageType
     {
@@ -119,13 +135,6 @@ pub mod ws_msg
     }
 
     #[derive(Serialize, Deserialize, Debug)]
-    pub struct PayloadScenarioUpdate
-    {
-        pub scenario_type : ScenarioTypes,
-        //pub scenario : Scenario
-    }
-
-    #[derive(Serialize, Deserialize, Debug)]
     pub struct PayloadDeviceList
     {
         pub device_list : Vec<Device>
@@ -144,4 +153,29 @@ pub mod ws_msg
         pub device_id : String,
         pub value : Option<String>
     }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct PayloadScenarioUpdate
+    {
+        pub scenario_type : ScenarioTypes,
+        pub scenario_payload : String
+    }
+
+    pub struct PayloadScenarioTimedToggle
+    {
+        
+    }
+    
+    pub struct PayloadScenarioSensorConditional
+    {
+        pub sensor_id : String,
+        pub treshold : String
+    }
+    
+    pub struct PayloadScenarioRead
+    {
+        pub device_id : String,
+        pub key_to_read : String
+    }
 }
+

@@ -57,7 +57,7 @@ pub mod device {
         {
             self.value = value;
         }
-        pub fn update(&mut self, new_dev: Device)
+        pub fn update(&mut self, new_dev: &Device)
         {
             if new_dev == self.device_id
             {
@@ -81,6 +81,14 @@ pub mod device {
         }
     }
 
+    impl PartialEq<String> for &Device
+    {
+        fn eq(&self, other: &String) -> bool
+        {
+            self.device_id == *other
+        }
+    }
+
     impl PartialEq<Device> for Device
     {
         fn eq(&self, other: &Device) -> bool
@@ -96,5 +104,11 @@ pub mod device {
             self.device_id == *other.device_id
         }
     }
-
+    
+    impl PartialEq<&mut Device> for Device
+    {
+        fn eq(&self, other: &&mut Device) -> bool {
+            self.device_id == *other.device_id
+        }
+    }
 }

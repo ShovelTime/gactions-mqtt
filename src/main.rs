@@ -53,7 +53,7 @@ async fn main() {
     a_client.set_message_callback(handle_message_async);
     let _conn_token = a_client.connect(conn_options).await.expect("Failed to connect to MQTT Broker");
 
-    let listener = TcpListener::bind("").await.expect("Failed to bind Socket"); 
+    //let listener = TcpListener::bind("").await.expect("Failed to bind Socket"); 
     HttpServer::new(move || { 
         App::new()
         .app_data(Data::new(Arc::clone(&device_container)))
@@ -62,6 +62,8 @@ async fn main() {
     .bind("0.0.0.0:18337").expect("Failed to start Websocket Listener!")
     .run()
     .await.expect("Failed to start HTTP Server");
+
+    sim_thread.join();
 
 
 

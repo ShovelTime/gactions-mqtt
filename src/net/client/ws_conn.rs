@@ -12,7 +12,7 @@ pub mod messaging{
     use actix_web::{web, Error, HttpRequest, HttpResponse, http::StatusCode};
     use tokio::sync::broadcast::{Receiver, self};
 
-    use crate::{net::client::ws_msg::ws_msg::{WsMessage, WsMessageType, PayloadDeviceUpdate, PayloadGetValue}, device::device::Device};
+    use crate::{net::client::ws_msg::ws_msg::{WsMessage, WsMessageType, PayloadDeviceUpdate, PayloadGetValue, PayloadScenarioUpdate}, device::device::Device};
 
     pub struct WsConn
     {
@@ -110,7 +110,7 @@ pub mod messaging{
                                                             let Ok(mut map) = self.dev_hash.write() else {return};
                                                             let Some(dev) = map.get_mut(&payload.device.topic) else {return};
                                                             let Some(tgt_dev) = dev.iter_mut().find(|d| **d == payload.device) else {return};
-                                                            tgt_dev.update(payload.device);
+                                                            tgt_dev.update(&payload.device);
                                                             //TODO:Inform every connected client of
                                                             //change
 
@@ -118,7 +118,20 @@ pub mod messaging{
                                                 Err(_) => println!("Error deserializing device update!"),
                                             }
                                         },
-                                        WsMessageType::SCENARIO_UPDATE => todo!(),
+                                        WsMessageType::SCENARIO_UPDATE => {
+                                            match serde_json::from_str::<PayloadScenarioUpdate>(&wsmsg.payload)
+                                            {
+                                                Ok(scenario) => {
+                                                    match scenario.scenario_type {
+                                                        crate::automatisation::voice_recognition::voice_recognition::ScenarioTypes::TIMED => todo!(),
+                                                        crate::automatisation::voice_recognition::voice_recognition::ScenarioTypes::SENSOR_CONDITIONAL => todo!(),
+                                                        crate::automatisation::voice_recognition::voice_recognition::ScenarioTypes::READ_SENSOR_OR_STATE => todo!(),
+                                                        crate::automatisation::voice_recognition::voice_recognition::ScenarioTypes::GENERAL_KENOBI => todo!(),
+                                                    }
+                                                },
+                                                Err(_) => todo!(),
+                                            }
+                                        },
                                         WsMessageType::VALUE_GET => {
                                             match serde_json::from_str::<PayloadGetValue>(&wsmsg.payload){
                                                 Ok(payload) => {
@@ -175,7 +188,23 @@ pub mod messaging{
 
 }
 
-
+    pub async fn send_ws_message(conn_list : Arc<RwLock<Vec<WeakAddr<WsConn>>>>, msg : WsMessage)
+    {
+        
+        match conn_list.write()
+        {
+            Ok(lock) => {
+                for w_addr in lock.iter()
+                    {
+                        let Some(addr) = w_addr.upgrade() else {
+                            println!("Addr {:?} was not cleared!", w_addr);
+                            continue};
+                        addr.do_send(msg.clone());
+                    }
+        },
+        Err(_) => todo!(),
+        }
+    }
     async fn ws_conn_request(
         req: HttpRequest,
         stream: web::Payload,
