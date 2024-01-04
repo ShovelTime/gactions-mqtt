@@ -62,10 +62,10 @@ pub mod device {
             if new_dev == self.device_id
             {
                 self.device_type = new_dev.device_type;
-                self.name = new_dev.name;
+                self.name = new_dev.name.clone();
                 self.connected = new_dev.connected;
                 self.activated = new_dev.activated;
-                self.value = new_dev.value;
+                self.value = new_dev.value.clone();
             }             
         }
     }

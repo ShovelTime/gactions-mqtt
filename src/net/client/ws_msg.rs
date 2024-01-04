@@ -161,8 +161,11 @@ pub mod ws_msg
         pub scenario_payload : String
     }
 
+    #[derive(Serialize, Deserialize, Debug)]
     pub struct PayloadScenarioTimedToggle
     {
+        pub sensor_id : String,
+        pub time : String //??????????????
         
     }
     

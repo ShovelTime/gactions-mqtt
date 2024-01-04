@@ -12,7 +12,7 @@ pub mod messaging{
     use actix_web::{web, Error, HttpRequest, HttpResponse, http::StatusCode};
     use tokio::sync::broadcast::{Receiver, self};
 
-    use crate::{net::client::ws_msg::ws_msg::{WsMessage, WsMessageType, PayloadDeviceUpdate, PayloadGetValue, PayloadScenarioUpdate}, device::device::Device};
+    use crate::{net::client::ws_msg::ws_msg::{WsMessage, WsMessageType, PayloadDeviceUpdate, PayloadGetValue, PayloadScenarioUpdate, PayloadScenarioTimedToggle}, device::device::Device, home::scenarios::scenarios::TimedToggle};
 
     pub struct WsConn
     {
@@ -123,7 +123,16 @@ pub mod messaging{
                                             {
                                                 Ok(scenario) => {
                                                     match scenario.scenario_type {
-                                                        crate::automatisation::voice_recognition::voice_recognition::ScenarioTypes::TIMED => todo!(),
+                                                        crate::automatisation::voice_recognition::voice_recognition::ScenarioTypes::TIMED => {
+                                                            let Ok(s_payload) = serde_json::from_str::<PayloadScenarioTimedToggle>(&scenario.scenario_payload) else {ctx.text("Malformed Scenario Payload!"); return};
+                                                            match self.dev_hash.read(){
+                                                                Ok(lock) => {
+                                                                   let Some(dev) = lock.values().flatten().find(|d| *d == s_payload.sensor_id) else {ctx.text("device_id not found!"); return}; 
+                                                                   //TimedToggle 
+                                                                },
+                                                                Err(err) => panic!("Whoever panicked above us is a poisonous nerd"),
+                                                            }
+                                                        },
                                                         crate::automatisation::voice_recognition::voice_recognition::ScenarioTypes::SENSOR_CONDITIONAL => todo!(),
                                                         crate::automatisation::voice_recognition::voice_recognition::ScenarioTypes::READ_SENSOR_OR_STATE => todo!(),
                                                         crate::automatisation::voice_recognition::voice_recognition::ScenarioTypes::GENERAL_KENOBI => todo!(),
