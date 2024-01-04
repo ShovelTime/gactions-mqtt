@@ -1,6 +1,7 @@
 use actix::WeakAddr;
 use device::device::Device;
-use net::{simmed::simmed::simulate_devices, device_update::device_updates::{MQTTUpdate, MQTTList}, client::ws_conn::messaging::WsConn};
+use net::{simmed::simmed::simulate_devices, device_update::device_updates::{MQTTUpdate, MQTTList}, client::{ws_conn::messaging::{WsConn, send_ws_message}, ws_msg::ws_msg::WsMessage}};
+use once_cell::sync::Lazy;
 use tokio::{net::TcpListener, sync::broadcast::*};
 use std::{sync::{RwLock, Arc}, any::Any};
 use paho_mqtt::{Message, Client, ConnectOptions, AsyncClient};
@@ -14,7 +15,9 @@ pub mod net;
 pub mod device;
 pub mod typedef;
 
+pub static DEVICE_CONTAINER : Lazy<Arc<RwLock<HashMap<String, Vec<Device>>>>> = Lazy::new(|| {Arc::new(RwLock::new(HashMap::new::<>()))});
 //TODO: Fix many of the simple unwrap()s.
+pub static CONN_LIST : Lazy<Arc<RwLock<Vec<WeakAddr<WsConn>>>>> = Lazy::new(|| {Arc::new(RwLock::new(Vec::new()))});
 #[deny(clippy::unwrap_used)]
 #[tokio::main(worker_threads = 8)]
 async fn main() {
@@ -48,10 +51,12 @@ async fn main() {
     */
     let a_client = AsyncClient::new("tcp://localhost:1883").unwrap();
     let dev_box: Box<dyn Any + Send + Sync> = Box::new(Arc::clone(&device_container));
-    let _ = a_client.user_data().insert(&dev_box);
+    //let _ = a_client.user_data().insert(&dev_box);
     let conn_options : ConnectOptions = ConnectOptions::new_v5();
     a_client.set_message_callback(handle_message_async);
     let _conn_token = a_client.connect(conn_options).await.expect("Failed to connect to MQTT Broker");
+    a_client.subscribe_many(&["add_device", "device_update"], &[2, 1]); 
+    
 
     //let listener = TcpListener::bind("").await.expect("Failed to bind Socket"); 
     HttpServer::new(move || { 
@@ -73,12 +78,14 @@ async fn main() {
 fn handle_message_async(client: &AsyncClient, recv_message : Option<Message>)
 {
 
-    let device_lock = client.user_data().as_ref().unwrap().downcast_ref::<Arc<RwLock<HashMap<String, Vec<Device>>>>>().unwrap();
+
+    //let device_lock = client.user_data().expect("What do you mean we have nothing in the user_data").downcast_ref::<Arc<RwLock<HashMap<String, Vec<Device>>>>>().expect("This should never crash, ye fucked up somewhere lad");
     let Some(msg) = recv_message else {
         println!("Received empty message!");
         return;
     };
-    let msg_type = msg.properties().get_string(paho_mqtt::PropertyCode::PayloadFormatIndicator).unwrap_or("unknown".to_string());
+    let msg_type = msg.properties().get_string(paho_mqtt::PropertyCode::ContentType).unwrap_or("unknown".to_string());
+    println!("we are so in lads");
                 
     match msg_type.as_str()
     {
@@ -87,7 +94,7 @@ fn handle_message_async(client: &AsyncClient, recv_message : Option<Message>)
             let mqtt_update  = serde_json::from_slice(&msg.payload());
             match mqtt_update
             {
-                Ok(dev_list) => update_device(dev_list, &device_lock),
+                Ok(dev_list) => {update_device(dev_list); println!("Recieved Device Update")},
 
                 Err(err) =>
                 {
@@ -100,13 +107,12 @@ fn handle_message_async(client: &AsyncClient, recv_message : Option<Message>)
             let device_list = serde_json::from_slice(&msg.payload());
             match device_list
             {
-                Ok(list) => add_to_device_list(list, &device_lock),
+                Ok(list) => add_to_device_list(list),
                 Err(err) => println!("Unrecognized MQTT message received! Printing payload: \n\n {} \n\n {}", err.to_string() ,std::str::from_utf8(&msg.payload()).unwrap_or("PARSE FAILED")),
             }
         }
 
-        _ => println!("Error Parsing Message! Printing payload: \n\n {}", std::str::from_utf8(&msg.payload()).unwrap_or("PARSE FAILED"))
-    }
+        _ =>  println!("Error Parsing Message! message_type: {} Printing payload: \n\n {}", msg_type, std::str::from_utf8(&msg.payload()).unwrap_or("PARSE FAILED"))  }
             
 } 
 
@@ -139,11 +145,11 @@ fn handle_message(client: Client, device_lock: Arc<RwLock<HashMap<String, Vec<De
                         let mqtt_update  = serde_json::from_slice(&msg.payload());
                         match mqtt_update
                         {
-                            Ok(dev_list) => update_device(dev_list, &device_lock),
+                            Ok(dev_list) => update_device(dev_list),
 
                             Err(err) =>
                             {
-                                println!("Error Parsing Message! Printing payload: \n\n {} \n\n {}", err.to_string() ,std::str::from_utf8(&msg.payload()).unwrap_or("PARSE FAILED"));
+                                println!("Error Parsing Update Message! Printing payload: \n\n {} \n\n {}", err.to_string() ,std::str::from_utf8(&msg.payload()).unwrap_or("PARSE FAILED"));
                             }
                         }
                     }
@@ -152,12 +158,12 @@ fn handle_message(client: Client, device_lock: Arc<RwLock<HashMap<String, Vec<De
                         let device_list = serde_json::from_slice(&msg.payload());
                         match device_list
                         {
-                            Ok(list) => add_to_device_list(list, &device_lock),
+                            Ok(list) => add_to_device_list(list),
                             Err(err) => println!("Unrecognized MQTT message received! Printing payload: \n\n {} \n\n {}", err.to_string() ,std::str::from_utf8(&msg.payload()).unwrap_or("PARSE FAILED")),
                         }
                     }
 
-                    _ => println!("Error Parsing Message! Printing payload: \n\n {}", std::str::from_utf8(&msg.payload()).unwrap_or("PARSE FAILED"))
+                    _ => println!("Error Parsing Message! message_type: {} Printing payload: \n\n {}", msg_type, std::str::from_utf8(&msg.payload()).unwrap_or("PARSE FAILED"))
                 }
             
             } 
@@ -168,7 +174,7 @@ fn handle_message(client: Client, device_lock: Arc<RwLock<HashMap<String, Vec<De
 }
 
 
-fn add_to_device_list(m_list : MQTTList,  list_lock : &RwLock<HashMap<String, Vec<Device>>>)
+fn add_to_device_list(m_list : MQTTList)
 {
 
     let Some(devices) = m_list.device_list else {
@@ -177,7 +183,7 @@ fn add_to_device_list(m_list : MQTTList,  list_lock : &RwLock<HashMap<String, Ve
     };
     devices.iter().for_each(|x| 
     {
-        match list_lock.write(){
+        match DEVICE_CONTAINER.write(){
             Ok(mut list) => 
             {
                 if list.contains_key(&x.topic)
@@ -199,20 +205,25 @@ fn add_to_device_list(m_list : MQTTList,  list_lock : &RwLock<HashMap<String, Ve
                 }
                 else
                 {
-                    list.insert(x.topic.clone(), Vec::new()).unwrap().push(x.clone());
+                    let vec = vec!(x.clone());
+                    list.insert(x.topic.clone(), vec);
                 }
+                
+                send_ws_message(Arc::clone(&CONN_LIST), WsMessage::device_list(list.values().flatten().collect()).expect("Damn list didnt properly serialize"));
+
             },
 
             Err(e) => panic!("RwLock poisoned! {}", e.to_string())
         
         }
+        println!("Added Device");
     });
 
 }
 
-fn update_device(update: MQTTUpdate, list_lock : &RwLock<HashMap<String, Vec<Device>>>)
+fn update_device(update: MQTTUpdate)
 {
-     match list_lock.write(){
+     match DEVICE_CONTAINER.write(){
 
         Ok(mut list) => 
         {
@@ -255,13 +266,15 @@ fn update_device(update: MQTTUpdate, list_lock : &RwLock<HashMap<String, Vec<Dev
                                         println!("value field was empty! Printing payload: \n\n {}", serde_json::to_string(&update).unwrap_or("PARSE FAILED".to_string()));
                                         return;
                                     };
-                                    device.set_value(Some(value.to_string()))
+                                    device.set_value(Some(value.to_string()));
                                 },
                                 _ => {
                                     println!("Unrecognized MQTTUpdate type received! Printing payload: \n\n {}", serde_json::to_string(&update).unwrap_or("PARSE FAILED".to_string()));
                                     return;
                                 }
                             }
+                            send_ws_message(Arc::clone(&CONN_LIST), WsMessage::device_update(device).expect("failed to parse Device"));                
+
                         }
                         
                         None => println!("Device {} not found in list! Printing payload: \n\n {}", update.device_id, serde_json::to_string(&update).unwrap_or("PARSE FAILED".to_string()))

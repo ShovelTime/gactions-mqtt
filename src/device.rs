@@ -42,6 +42,14 @@ pub mod device {
         {
             self.activated
         }
+        pub fn toggle(&mut self)
+        {
+            match self.activated
+                {
+                    true => self.activated = false,
+                    false => self.activated = true,
+                }
+        }
         pub fn get_connection_status(&self) -> bool
         {
             self.connected
@@ -82,6 +90,14 @@ pub mod device {
     }
 
     impl PartialEq<String> for &Device
+    {
+        fn eq(&self, other: &String) -> bool
+        {
+            self.device_id == *other
+        }
+    }
+
+    impl PartialEq<String> for &mut Device
     {
         fn eq(&self, other: &String) -> bool
         {

@@ -14,11 +14,17 @@ actix-web = "4.4.1"
 async-stream = "0.3.5"
 actix-web-actors = "4.2"
 rand = "0.8.5"
+once_cell = "1.19.0"
 
 
 #[dependencies.pyo3]
 #version = "0.20.0"
 #features = ["auto-initialize"]
+
+[dependencies.chrono]
+feature = ["serde"]
+default-features = true
+version = "0.4.31"
 
 [dependencies.tokio]
 features = ["net", "time", "macros", "rt-multi-thread"]

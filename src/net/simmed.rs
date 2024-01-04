@@ -3,7 +3,7 @@ pub mod simmed
     use core::time;
     use std::thread;
 
-    use crate::{device::{device::Device, device::DeviceType}, net::device_update::device_updates::{MQTTUpdate, DeviceUpdateType}};
+    use crate::{device::{device::Device, device::DeviceType}, net::device_update::device_updates::{MQTTUpdate, DeviceUpdateType, MQTTList}};
     use mqtt::{ConnectOptions, MessageBuilder, Properties};
     use paho_mqtt as mqtt;
     use rand::{thread_rng, Rng};
@@ -24,7 +24,7 @@ pub mod simmed
         let list_message = MessageBuilder::default()
         .qos(1)
         .topic("add_device").properties(list_props)
-        .payload(serde_json::to_vec(&device_list).unwrap())
+        .payload(serde_json::to_vec(&MQTTList::new(device_list.clone())).unwrap())
         .finalize();
 
         broker_conn.publish(list_message).unwrap();
@@ -68,7 +68,7 @@ pub mod simmed
                         let updated_message = MessageBuilder::default()
                         .properties(dev_props.clone())
                         .payload(msg)
-                        .topic(device.topic.clone())
+                        .topic("device_update")
                         .finalize();
 
                         match broker_conn.publish(updated_message) {

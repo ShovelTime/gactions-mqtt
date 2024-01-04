@@ -2,6 +2,7 @@ pub mod ws_msg
 {
 
 
+    use chrono::{DateTime,Local};
     use actix::Message;
     use serde::{Serialize, Deserialize};
 
@@ -24,6 +25,19 @@ pub mod ws_msg
                     message_type: WsMessageType::DEVICE_UPDATE, 
                     payload: dev_str }),
                 Err(err) => return Err(err),
+            }
+
+        }
+
+        pub fn device_list(tgt : Vec<&Device>) -> Result<WsMessage, serde_json::Error>
+        {
+            let parse_res = serde_json::to_string(&tgt);
+            match parse_res{
+                Ok(vec_str) => Ok(WsMessage {
+                    message_type: WsMessageType::DEVICE_LIST,
+                    payload : vec_str }),
+                Err(err) => return Err(err),
+                
             }
 
         }
@@ -165,7 +179,7 @@ pub mod ws_msg
     pub struct PayloadScenarioTimedToggle
     {
         pub sensor_id : String,
-        pub time : String //??????????????
+        pub time : String //should be ISO-8601
         
     }
     

@@ -10,9 +10,10 @@ pub mod messaging{
     use actix_web_actors::ws::{self, WebsocketContext, WsResponseBuilder};
     use actix::{Actor, StreamHandler, AsyncContext, ActorContext, Addr, SpawnHandle, Handler, WeakAddr};
     use actix_web::{web, Error, HttpRequest, HttpResponse, http::StatusCode};
+    use chrono::{DateTime, Utc, FixedOffset, Local};
     use tokio::sync::broadcast::{Receiver, self};
 
-    use crate::{net::client::ws_msg::ws_msg::{WsMessage, WsMessageType, PayloadDeviceUpdate, PayloadGetValue, PayloadScenarioUpdate, PayloadScenarioTimedToggle}, device::device::Device, home::scenarios::scenarios::TimedToggle};
+    use crate::{net::client::ws_msg::ws_msg::{WsMessage, WsMessageType, PayloadDeviceUpdate, PayloadGetValue, PayloadScenarioUpdate, PayloadScenarioTimedToggle}, device::device::Device, home::scenarios::scenarios::TimedToggle, CONN_LIST};
 
     pub struct WsConn
     {
@@ -113,6 +114,7 @@ pub mod messaging{
                                                             tgt_dev.update(&payload.device);
                                                             //TODO:Inform every connected client of
                                                             //change
+                                                            
 
                                                 },
                                                 Err(_) => println!("Error deserializing device update!"),
@@ -128,9 +130,16 @@ pub mod messaging{
                                                             match self.dev_hash.read(){
                                                                 Ok(lock) => {
                                                                    let Some(dev) = lock.values().flatten().find(|d| *d == s_payload.sensor_id) else {ctx.text("device_id not found!"); return}; 
-                                                                   //TimedToggle 
+                                                                   let id = dev.get_id().clone(); 
+                                                                   drop(lock); 
+                                                                   let Ok(time) = DateTime::<FixedOffset>::parse_from_rfc3339(&s_payload.time) else {ctx.text(format!("Malformed time string! {}", s_payload.time)); return};//TimedToggle
+                                                                   
+                                                                   let Ok(timestamp) = TryInto::<u64>::try_into(time.naive_local().timestamp() - Local::now().naive_local().timestamp()) else {ctx.text("target time cant be before the present!"); return};
+                                                                   let Some(time_until) = std::time::Instant::now().checked_add(Duration::from_secs(timestamp)) else {ctx.text("Instant got out of range!"); return}; 
+                                                                   TimedToggle::new(actix::clock::Instant::from_std(time_until), vec!(id), self.dev_hash.clone(), self.conn_list.clone());
+                                                                        
                                                                 },
-                                                                Err(err) => panic!("Whoever panicked above us is a poisonous nerd"),
+                                                                Err(_) => panic!("Whoever panicked above us is a poisonous nerd"),
                                                             }
                                                         },
                                                         crate::automatisation::voice_recognition::voice_recognition::ScenarioTypes::SENSOR_CONDITIONAL => todo!(),
@@ -197,10 +206,10 @@ pub mod messaging{
 
 }
 
-    pub async fn send_ws_message(conn_list : Arc<RwLock<Vec<WeakAddr<WsConn>>>>, msg : WsMessage)
+    pub fn send_ws_message(conn_list : Arc<RwLock<Vec<WeakAddr<WsConn>>>>, msg : WsMessage)
     {
         
-        match conn_list.write()
+        match crate::CONN_LIST.write()
         {
             Ok(lock) => {
                 for w_addr in lock.iter()
@@ -214,6 +223,13 @@ pub mod messaging{
         Err(_) => todo!(),
         }
     }
+
+    pub async fn send_ws_message_async(conn_list : Arc<RwLock<Vec<WeakAddr<WsConn>>>>, msg : WsMessage)
+    {
+        send_ws_message(conn_list, msg)
+    }
+
+    
     async fn ws_conn_request(
         req: HttpRequest,
         stream: web::Payload,
@@ -228,7 +244,7 @@ pub mod messaging{
         match ws_conn.start_with_addr()
         {
             Ok(res) => {
-                    ws_handler.write().expect("Alright, who's the funny thread that poisoned our lock, WHILE LEAVING?!").push(res.0.downgrade());
+                    CONN_LIST.write().expect("Alright, who's the funny thread that poisoned our lock, WHILE LEAVING?!").push(res.0.downgrade());
                     return Ok(res.1);
                 },
             Err(_) => return Ok(HttpResponse::new(StatusCode::INTERNAL_SERVER_ERROR))

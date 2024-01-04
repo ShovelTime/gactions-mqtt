@@ -44,4 +44,19 @@ pub mod device_updates
     {
         pub device_list : Option<Vec<Device>>  
     }
+    impl MQTTList
+    {
+        pub fn new(device_list : Vec<Device>) -> Self
+        {
+            if device_list.is_empty()
+            {
+                MQTTList{device_list : None}
+            }
+            else
+            {
+                MQTTList{device_list : Some(device_list)}
+            }
+            
+        }
+    }
 }

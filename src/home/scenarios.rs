@@ -5,19 +5,19 @@ pub mod scenarios
     use actix::WeakAddr;
     use tokio::time::{sleep_until, Instant, Duration};
 
-    use crate::{device::device::Device, net::client::ws_conn::messaging::WsConn};
+    use crate::{device::device::Device, net::client::{ws_conn::messaging::{WsConn, send_ws_message, send_ws_message_async}, ws_msg::ws_msg::{WsMessage, WsMessageType}}, typedef::typedef::DeviceId};
 
     pub struct TimedToggle
     {
             time_to_trigger: Instant,
-            devices: Vec<Device>,
+            devices: Vec<DeviceId>,
             device_hash: Arc<RwLock<HashMap<String, Vec<Device>>>>,
             conn_list: Arc<RwLock<Vec<WeakAddr<WsConn>>>>
             
     }
     impl TimedToggle
     {
-        fn new(time_to_trigger: Instant, devices: Vec<Device>, device_hash: Arc<RwLock<HashMap<String, Vec<Device>>>>, conn_list: Arc<RwLock<Vec<WeakAddr<WsConn>>>>   ) -> TimedToggle
+        pub fn new(time_to_trigger: Instant, devices: Vec<DeviceId>, device_hash: Arc<RwLock<HashMap<String, Vec<Device>>>>, conn_list: Arc<RwLock<Vec<WeakAddr<WsConn>>>>   ) -> TimedToggle
         {
             let mut n_devices = Vec::new();
             for device in devices
@@ -38,31 +38,21 @@ pub mod scenarios
             sleep_until(self.time_to_trigger).await;
             match self.device_hash.write()
             {
+                //This has terrible time complexity, should be rewritten if possible.
                 Ok(mut hash) => {
-                            for device_vec in hash.values_mut()
-                            {
-                                for device in &mut *device_vec
+                    let tgt_devices = hash.values_mut().flatten().filter(|x| {self.devices.iter().any(|y| {x == y})});//.into_iter(); 
+                    for device in tgt_devices
+                    {
+                        device.toggle();
+                        send_ws_message_async(Arc::clone(&self.conn_list), WsMessage::device_update(device).expect("wow we really failed to parse the device huh")).await;
+                        //send mqtt update
+                    }
 
-                                {
-                                    if self.devices.contains(device)
-                                    {
-                                        let Some(tgt_dev) = self.devices.iter_mut().find(|d| **d == device) else {panic!("Reality has broken down, or you just fucked up                                                                                                        the device comparison here, device 1 :\n {:?} \n\n device_vec : {:?} \n 
-                                        " , device, self.devices);}; 
-
-                                        device.update(tgt_dev)
-
-                                        
-                                    }
-                                }
-                            }
-                    },
+               },
                 Err(err) => panic!("who the fuck poisoned the lock, and why did we not crash yet. \n\n {}", err),
             }
             Ok(())
         }
 
-        async fn trigger(&self)
-        {
-        }
     }
 }
