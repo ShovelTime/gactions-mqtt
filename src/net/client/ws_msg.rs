@@ -186,7 +186,8 @@ pub mod ws_msg
     pub struct PayloadScenarioSensorConditional
     {
         pub sensor_id : String,
-        pub treshold : String
+        pub treshold : i32,
+        pub cmp_over : bool
     }
     
     pub struct PayloadScenarioRead

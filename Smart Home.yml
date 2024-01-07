@@ -1,0 +1,39 @@
+context:
+  expressions:
+    Timed_toggle:
+      - $conditional:action (the) $pv.Alphanumeric:device in
+        $pv.TwoDigitInteger:time $time_amnt:time_def
+    General_kenobi:
+      - Oh it's you
+      - Another Happy Landing
+      - Always on the move
+      - Hello There
+    Sensor_read:
+      - "[What is, Read] (the) value of $pv.Alphanumeric:device"
+      - What [Temperature, Brightness] is $pv.Alphanumeric:device
+      - How [Hot, Bright] is $pv.Alphanumeric:device
+    Conditional_Trigger:
+      - $conditional:action $pv.Alphanumeric:tgt_dev [if, when]
+        $pv.Alphanumeric:sensor_id [is, reaches, reads] $over_under:range (than)
+        $pv.Alphanumeric:value ($sensor_units:units)
+    Voice_toggle:
+      - Toggle (the) $pv.Alphanumeric:device
+  slots:
+    time_amnt:
+      - minutes
+      - hours
+      - days
+      - seconds
+    conditional:
+      - toggle
+      - read
+    sensor_units:
+      - Lux
+      - Celsius
+      - C
+    over_under:
+      - less
+      - under
+      - above
+      - over
+  macros: {}
