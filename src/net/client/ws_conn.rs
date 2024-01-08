@@ -4,33 +4,29 @@ pub mod messaging{
     static TIMEOUT_DELAY : Duration = Duration::from_secs(10);
     // Open WS connection;
 
-    use std::{time::{Duration, Instant}, ops::Deref, collections::HashMap, sync::{RwLock, Arc}};
+    use std::{time::{Duration, Instant}, ops::{Deref, Range}, collections::HashMap, sync::{RwLock, Arc}};
 
     use actix_web::web::Data;
     use actix_web_actors::ws::{self, WebsocketContext, WsResponseBuilder};
     use actix::{Actor, StreamHandler, AsyncContext, ActorContext, Addr, SpawnHandle, Handler, WeakAddr};
     use actix_web::{web, Error, HttpRequest, HttpResponse, http::StatusCode};
     use chrono::{DateTime, Utc, FixedOffset, Local};
+    use serde_json::{Map, Value};
     use tokio::sync::broadcast::{Receiver, self};
 
-    use crate::{net::client::ws_msg::ws_msg::{WsMessage, WsMessageType, PayloadDeviceUpdate, PayloadGetValue, PayloadScenarioUpdate, PayloadScenarioTimedToggle}, device::device::Device, home::scenarios::scenarios::TimedToggle, CONN_LIST};
-
+    use crate::{net::{client::ws_msg::ws_msg::{WsMessage, WsMessageType, PayloadDeviceUpdate, PayloadGetValue, PayloadScenarioUpdate, PayloadScenarioTimedToggle, PayloadDeviceCommand, CommandType, PayloadScenarioSensorConditional}, device_update::device_updates::{MQTTUpdate, DeviceUpdateType}}, home::scenarios::scenarios::{TimedToggle, ConditionalTrigger}, CONN_LIST, ws_error, DEVICE_CONTAINER, automatisation::voice_recognition::voice_recognition::ScenarioTypes, SCENARIO_LIST, MQTT_SENDER};
     pub struct WsConn
     {
         hb : Instant,
         continuation_buf : Vec<u8>,
         self_addr : Option<WeakAddr<Self>>,
-        dev_hash : Arc<RwLock<HashMap<String, Vec<Device>>>>,
-        conn_list : Arc<RwLock<Vec<WeakAddr<Self>>>>
-
-
     }
     
     impl WsConn{
 
-        pub fn new(dev_hash: Arc<RwLock<HashMap<String, Vec<Device>>>>, conn_list: Arc<RwLock<Vec<WeakAddr<Self>>>>) -> WsConn
+        pub fn new() -> WsConn
         {
-            WsConn{hb: Instant::now(), conn_list, self_addr : None, continuation_buf: Vec::new(), dev_hash}
+            WsConn{hb: Instant::now(),  self_addr : None, continuation_buf: Vec::new()}
             
         }
     }
@@ -103,19 +99,42 @@ pub mod messaging{
                                     match wsmsg.message_type
                                     {
                                         WsMessageType::DEVICE_CMD => {
+                                            match serde_json::from_str::<PayloadDeviceCommand>(&wsmsg.payload){
+                                                Ok(payload) => {
+                                                    let Ok(mut map) = DEVICE_CONTAINER.write() else {return};
+                                                    let Some(tgt_dev) = map.values_mut().flatten().find(|d| {*d == payload.device_id}) else {return};
+                                                    match payload.command{
+                                                        CommandType::TOGGLE => tgt_dev.toggle(),
+                                                        CommandType::ENABLE => tgt_dev.activated = true,
+                                                        CommandType::DISABLE => tgt_dev.activated = false,
+                                                        CommandType::UNKNOWN => {ctx.text(ws_error!(format!("Unknown Command Type! {}", wsmsg.payload))); return},
+                                                    }
+                                                    let n_msg = WsMessage::device_update(tgt_dev).expect("device parsing failed");
+
+                                                    
+                                                    let mut mqtt_map = Map::<String, Value>::new();
+                                                    mqtt_map.insert("activated".to_string(), tgt_dev.activated.to_string().into());
+                                                    let update = MQTTUpdate{ update_type: DeviceUpdateType::ACTIVATION_CHANGE, device_id: payload.device_id, topic:tgt_dev.topic.clone() , update_fields: mqtt_map };
+                                                    drop(map);
+                                                    let _ = MQTT_SENDER.send(update);
+                                                    send_ws_message(n_msg); 
+
+
+                                                },
+                                                Err(_) => todo!(),
+                                            }
                                                 
-                                                } ,
+                                        } ,
                                         WsMessageType::DEVICE_UPDATE => {
+                                            println!("deprecated function called");
                                             match serde_json::from_str::<PayloadDeviceUpdate>(&wsmsg.payload){
                                                 Ok(payload) => {
-                                                            let Ok(mut map) = self.dev_hash.write() else {return};
+                                                            let Ok(mut map) = DEVICE_CONTAINER.write() else {return};
                                                             let Some(dev) = map.get_mut(&payload.device.topic) else {return};
                                                             let Some(tgt_dev) = dev.iter_mut().find(|d| **d == payload.device) else {return};
                                                             tgt_dev.update(&payload.device);
-                                                            //TODO:Inform every connected client of
-                                                            //change
-                                                            
-
+                                                            drop(map);
+                                                            send_ws_message(wsmsg);
                                                 },
                                                 Err(_) => println!("Error deserializing device update!"),
                                             }
@@ -125,26 +144,77 @@ pub mod messaging{
                                             {
                                                 Ok(scenario) => {
                                                     match scenario.scenario_type {
-                                                        crate::automatisation::voice_recognition::voice_recognition::ScenarioTypes::TIMED => {
-                                                            let Ok(s_payload) = serde_json::from_str::<PayloadScenarioTimedToggle>(&scenario.scenario_payload) else {ctx.text("Malformed Scenario Payload!"); return};
-                                                            match self.dev_hash.read(){
+                                                        ScenarioTypes::TIMED => {
+                                                            let Ok(s_payload) = serde_json::from_str::<PayloadScenarioTimedToggle>(&scenario.scenario_payload) else 
+                                                                        {ctx.text(ws_error!("Malformed Scenario Payload!")); return};
+                                                            match DEVICE_CONTAINER.read(){
                                                                 Ok(lock) => {
-                                                                   let Some(dev) = lock.values().flatten().find(|d| *d == s_payload.sensor_id) else {ctx.text("device_id not found!"); return}; 
+                                                                   let Some(dev) = lock.values().flatten().find(|d| *d == s_payload.sensor_id) else 
+                                                                                {ctx.text(ws_error!("device_id not found!")); return}; 
                                                                    let id = dev.get_id().clone(); 
                                                                    drop(lock); 
-                                                                   let Ok(time) = DateTime::<FixedOffset>::parse_from_rfc3339(&s_payload.time) else {ctx.text(format!("Malformed time string! {}", s_payload.time)); return};//TimedToggle
+                                                                   let Ok(time) = DateTime::<FixedOffset>::parse_from_rfc3339(&s_payload.time) else 
+                                                                                {ctx.text(ws_error!(format!("Malformed time string! {}", s_payload.time))); return};//TimedToggle
                                                                    
-                                                                   let Ok(timestamp) = TryInto::<u64>::try_into(time.naive_local().timestamp() - Local::now().naive_local().timestamp()) else {ctx.text("target time cant be before the present!"); return};
-                                                                   let Some(time_until) = std::time::Instant::now().checked_add(Duration::from_secs(timestamp)) else {ctx.text("Instant got out of range!"); return}; 
-                                                                   TimedToggle::new(actix::clock::Instant::from_std(time_until), vec!(id), self.dev_hash.clone(), self.conn_list.clone());
+                                                                   let Ok(timestamp) = TryInto::<u64>::try_into(time.naive_local().timestamp() - Local::now().naive_local().timestamp()) else 
+                                                                                {ctx.text(ws_error!("target time cant be before the present!")); return};
+                                                                   let Some(time_until) = std::time::Instant::now().checked_add(Duration::from_secs(timestamp)) else 
+                                                                                {ctx.text(ws_error!("Instant got out of range!")); return}; 
+                                                                   let s_id = TimedToggle::new(actix::clock::Instant::from_std(time_until), vec!(id));
+                                                                   let mut s_res = scenario.clone(); 
+                                                                   s_res.scenario_id = Some(s_id);
+                                                                   s_res.completed = Some(false);
+                                                                    
+                                                                   send_ws_message( WsMessage{
+                                                                       message_type: WsMessageType::SCENARIO_UPDATE,
+                                                                       payload : serde_json::to_string(&s_res).expect("failed to serialize scenario update")
+
+                                                                   });
+
+                                                                   SCENARIO_LIST.read().expect("failed to get scenario list").iter().find(|s| {s.get_id() == s_id}).unwrap().start();
                                                                         
                                                                 },
                                                                 Err(_) => panic!("Whoever panicked above us is a poisonous nerd"),
                                                             }
                                                         },
-                                                        crate::automatisation::voice_recognition::voice_recognition::ScenarioTypes::SENSOR_CONDITIONAL => todo!(),
-                                                        crate::automatisation::voice_recognition::voice_recognition::ScenarioTypes::READ_SENSOR_OR_STATE => todo!(),
-                                                        crate::automatisation::voice_recognition::voice_recognition::ScenarioTypes::GENERAL_KENOBI => todo!(),
+                                                        ScenarioTypes::SENSOR_CONDITIONAL =>
+                                                        {
+                                                            let Ok(s_payload) = serde_json::from_str::<PayloadScenarioSensorConditional>(&scenario.scenario_payload) else 
+                                                                        {ctx.text(ws_error!(format!("Malformed Scenario Payload! \n {}", scenario.scenario_payload))); return};
+                                                            
+                                                            let range: Range<i32>;
+                                                            if s_payload.cmp_over
+                                                            {
+                                                                range = s_payload.treshold..i32::MAX;
+                                                            }
+                                                            else
+                                                            {
+                                                                range = i32::MIN..s_payload.treshold;
+                                                            }
+
+                                                            let res = ConditionalTrigger::new(s_payload.sensor_id, range, s_payload.target_device);
+                                                            match res {
+                                                                Ok(s_id) => {
+                                                                    let mut s_res = scenario.clone();
+                                                                    s_res.scenario_id = Some(s_id);
+                                                                    s_res.completed = Some(false);
+                                                                    
+                                                                    send_ws_message( WsMessage{
+                                                                        message_type: WsMessageType::SCENARIO_UPDATE,
+                                                                        payload : serde_json::to_string(&s_res).expect("failed to serialize scenario update")
+
+                                                                    });
+
+
+                                                                },
+                                                                Err(err) => ctx.text(ws_error!(err)),
+                                                            }
+
+
+                                                        }
+
+                                                        ScenarioTypes::READ_SENSOR_OR_STATE => todo!(),
+                                                        ScenarioTypes::GENERAL_KENOBI => println!("hello there"), 
                                                     }
                                                 },
                                                 Err(_) => todo!(),
@@ -153,12 +223,11 @@ pub mod messaging{
                                         WsMessageType::VALUE_GET => {
                                             match serde_json::from_str::<PayloadGetValue>(&wsmsg.payload){
                                                 Ok(payload) => {
-                                                            let Ok(map) = self.dev_hash.read() else {return};
-                                                            let Some(dev) = map.get(&payload.topic) else {return};
-                                                            let Some(tgt_dev) = dev.iter().find(|d| **d == payload.device_id) else {return};
+                                                            let Ok(map) = DEVICE_CONTAINER.read() else {return};
+                                                            let Some(dev) = map.get(&payload.topic) else {ctx.text(ws_error!("Topic for device not found!")); return};
+                                                            let Some(tgt_dev) = dev.iter().find(|d| **d == payload.device_id) else {ctx.text(ws_error!("Device not found!")); return};
                                                             let val = tgt_dev.get_value().unwrap_or("null".to_string());
-                                                            ctx.text(val);
-                                                            
+                                                            send_ws_message(WsMessage::value(tgt_dev.get_id().to_string(), val).expect("how did 2 string parsing fail"))                                                            
                                                 },
                                                 Err(_) => println!("Error deserializing device update!"),
                                             } 
@@ -168,7 +237,7 @@ pub mod messaging{
                                 },
                                 Err(e) => 
                                 {
-                                    ctx.text("Message Serialization Error.")
+                                    ctx.text(ws_error!(format!("Message Deserialization error: {}", e.to_string())))
 
                                 }
                             }
@@ -206,7 +275,7 @@ pub mod messaging{
 
 }
 
-    pub fn send_ws_message(conn_list : Arc<RwLock<Vec<WeakAddr<WsConn>>>>, msg : WsMessage)
+    pub fn send_ws_message( msg : WsMessage)
     {
         
         match crate::CONN_LIST.write()
@@ -224,21 +293,18 @@ pub mod messaging{
         }
     }
 
-    pub async fn send_ws_message_async(conn_list : Arc<RwLock<Vec<WeakAddr<WsConn>>>>, msg : WsMessage)
+    pub async fn send_ws_message_async( msg : WsMessage)
     {
-        send_ws_message(conn_list, msg)
+        send_ws_message( msg)
     }
 
     
-    async fn ws_conn_request(
+    pub async fn ws_conn_request(
         req: HttpRequest,
         stream: web::Payload,
-        device_lock : Data<Arc<RwLock<HashMap<String, Vec<Device>>>>>, 
-        ws_handler: Data<Arc<RwLock<Vec<WeakAddr<WsConn>>>>>
     ) -> Result<HttpResponse, Error>
     {
-        let ws_instance = WsConn::new(Arc::clone(device_lock.clone().deref()),
-            Arc::clone(ws_handler.clone().deref()));
+        let ws_instance = WsConn::new();
         let ws_conn = WsResponseBuilder::new(ws_instance, &req, stream);
         
         match ws_conn.start_with_addr()

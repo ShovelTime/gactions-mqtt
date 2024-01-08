@@ -1,23 +1,33 @@
 use actix::WeakAddr;
 use device::device::Device;
-use net::{simmed::simmed::simulate_devices, device_update::device_updates::{MQTTUpdate, MQTTList}, client::{ws_conn::messaging::{WsConn, send_ws_message}, ws_msg::ws_msg::WsMessage}};
+use home::scenarios::scenarios::Scenario;
+use net::{simmed::simmed::{simulate_devices, reattempt_connection, reattempt_connection_async}, device_update::device_updates::{MQTTUpdate, MQTTList, MQTTStatus}, client::{ws_conn::messaging::{WsConn, send_ws_message, ws_conn_request}, ws_msg::ws_msg::WsMessage}};
 use once_cell::sync::Lazy;
-use tokio::{net::TcpListener, sync::broadcast::*};
-use std::{sync::{RwLock, Arc}, any::Any};
-use paho_mqtt::{Message, Client, ConnectOptions, AsyncClient};
+use tokio::{net::TcpListener, sync::{broadcast::{*, self}, mpsc::UnboundedSender}};
+use std::{sync::{RwLock, Arc, atomic::AtomicUsize}, any::Any, time::Duration};
+use paho_mqtt::{Message, Client, ConnectOptions, AsyncClient, ConnectOptionsBuilder, MessageBuilder, Properties, PropertyCode, Error};
 use crate::{device::device::DeviceType, net::device_update::device_updates::DeviceUpdateType};
 use std::{thread, collections::HashMap};
-use actix_web::{App, HttpServer, web::Data};
+use actix_web::{App, HttpServer, web::{Data, self}};
 
 pub mod automatisation;
 pub mod home;
+ #[macro_use]
 pub mod net;
 pub mod device;
 pub mod typedef;
 
 pub static DEVICE_CONTAINER : Lazy<Arc<RwLock<HashMap<String, Vec<Device>>>>> = Lazy::new(|| {Arc::new(RwLock::new(HashMap::new::<>()))});
-//TODO: Fix many of the simple unwrap()s.
+
 pub static CONN_LIST : Lazy<Arc<RwLock<Vec<WeakAddr<WsConn>>>>> = Lazy::new(|| {Arc::new(RwLock::new(Vec::new()))});
+
+pub static SCENARIO_COUNTER : AtomicUsize = AtomicUsize::new(0); //yes this will eventually
+//crash in a few hundred years, too bad!
+
+pub static SCENARIO_LIST : Lazy<Arc<RwLock<Vec<Box<dyn Scenario + Sync + Send>>>>> = Lazy::new(|| {Arc::new(RwLock::new(Vec::new()))});
+
+pub const MQTT_SENDER : Lazy<broadcast::Sender<MQTTUpdate>> = Lazy::new(|| {broadcast::channel(1000).0}); 
+
 #[deny(clippy::unwrap_used)]
 #[tokio::main(worker_threads = 8)]
 async fn main() {
@@ -49,33 +59,117 @@ async fn main() {
         handle_message(mqtt_receiver, lock_recv);
     });
     */
-    let a_client = AsyncClient::new("tcp://localhost:1883").unwrap();
-    let dev_box: Box<dyn Any + Send + Sync> = Box::new(Arc::clone(&device_container));
-    //let _ = a_client.user_data().insert(&dev_box);
-    let conn_options : ConnectOptions = ConnectOptions::new_v5();
-    a_client.set_message_callback(handle_message_async);
-    let _conn_token = a_client.connect(conn_options).await.expect("Failed to connect to MQTT Broker");
-    a_client.subscribe_many(&["add_device", "device_update"], &[2, 1]); 
-    
 
-    //let listener = TcpListener::bind("").await.expect("Failed to bind Socket"); 
     HttpServer::new(move || { 
-        App::new()
-        .app_data(Data::new(Arc::clone(&device_container)))
-        .app_data(Data::new(Arc::clone(&conn_list)))
+        App::new().route("/ws", web::get().to(ws_conn_request))
     })
     .bind("0.0.0.0:18337").expect("Failed to start Websocket Listener!")
     .run()
     .await.expect("Failed to start HTTP Server");
 
-    sim_thread.join();
+    let mut props = Properties::new();
+    props.push_val(PropertyCode::PayloadFormatIndicator, 1).expect("failed to add property");
+    props.push_string(PropertyCode::ContentType, "root_online").expect("failed to add property");
+    let a_client = AsyncClient::new("tcp://localhost:1883").unwrap();
+    //let _ = a_client.user_data().insert(&dev_box);
+    let conn_options : ConnectOptions = ConnectOptionsBuilder::new_v5().will_message(
+        MessageBuilder::default() // if we lost connection, let em know
+            .qos(2)
+            .properties(props.clone())
+            .retained(true)
+            .topic("root_online")
+            .payload(serde_json::to_vec(&MQTTStatus{connected: false}).expect("MQTTStatus has fucked serialization"))
+            .finalize()
+    ).finalize();
+    a_client.set_message_callback(handle_message_async);
+    a_client.set_connected_callback(|a_cli| {a_cli.subscribe_many(&["add_device", "device_update"], &[2, 1]);
+
+        let mut props = Properties::new();
+        props.push_val(PropertyCode::PayloadFormatIndicator, 1).expect("failed to add property");
+        props.push_string(PropertyCode::ContentType, "root_online").expect("failed to add property");
+        let online = MessageBuilder::default() // advertise root as online
+            .qos(2)
+            .properties(props)
+            .retained(true)
+            .topic("root_online")
+            .payload(serde_json::to_vec(&MQTTStatus{connected: true}).expect("MQTTStatus has fucked serialization"))
+            .finalize();
+        a_cli.publish(online);        
+    });
+    let conn_token = a_client.connect(conn_options.clone()).await;
+    let mqtt_arc = Arc::new(a_client);
+    let opt_arc = Arc::new(conn_options);
+
+    match conn_token {
+        Ok(_) => (),
+        Err(_) => {
+            let ref_cli = Arc::clone(&mqtt_arc);
+            let reconn_opt_arc = Arc::clone(&opt_arc);
+            tokio::spawn(async move {
+                while !ref_cli.is_connected()
+                {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    ref_cli.connect(reconn_opt_arc.as_ref().clone());
+                }
+            });
+        },
+
+        }
+    
+    
+
+    //let listener = TcpListener::bind("").await.expect("Failed to bind Socket"); 
+
+
+    let conn_opts = Arc::clone(&opt_arc);
+    tokio::spawn(async move{
+        
+        let mut recv = MQTT_SENDER.subscribe();
+        let mut dev_props = Properties::new();
+        dev_props.push_val(PropertyCode::PayloadFormatIndicator, 1).expect("failed to add property");
+        dev_props.push_string(PropertyCode::ContentType, "device_update").expect("failed to add property");
+        loop
+        {
+            let msg = recv.recv().await.expect("This should never crash, yet here we are");
+
+            let update_payload = serde_json::to_vec(&msg);
+            match update_payload {
+                Ok(msg) => {
+                    let updated_message = MessageBuilder::default()
+                    .properties(dev_props.clone())
+                    .payload(msg)
+                    .topic("device_update")
+                    .finalize();
+
+                    match mqtt_arc.publish(updated_message).await {
+                        Ok(_) => continue,
+                        Err(e) => {
+                            match e {
+                                Error::PahoDescr(_, _) => reattempt_connection_async(&mqtt_arc, conn_opts.as_ref().clone()).await.unwrap_or_else(|e| 
+                                    panic!("Failed to restablish connection! {}", e.to_string())),
+                                _ => panic!("Man MQTT Shit broke: {}", e.to_string())
+                            }
+                        }
+                    }
+                        
+                }
+                Err(e) => {
+                    println!("MQTTUpdate failed to serialize! \n {}", e.to_string());
+                    continue;
+                }
+                    
+            }
+            
+        }
+    });
+
+    let _ = sim_thread.join();
 
 
 
 }
 
-
-fn handle_message_async(client: &AsyncClient, recv_message : Option<Message>)
+fn handle_message_async(_client: &AsyncClient, recv_message : Option<Message>)
 {
 
 
@@ -116,8 +210,8 @@ fn handle_message_async(client: &AsyncClient, recv_message : Option<Message>)
             
 } 
 
-
-fn handle_message(client: Client, device_lock: Arc<RwLock<HashMap<String, Vec<Device>>>>)
+#[allow(dead_code)]
+fn handle_message(client: Client, _device_lock: Arc<RwLock<HashMap<String, Vec<Device>>>>)
 {
  
     let conn_options : ConnectOptions = ConnectOptions::new_v5();
@@ -209,7 +303,7 @@ fn add_to_device_list(m_list : MQTTList)
                     list.insert(x.topic.clone(), vec);
                 }
                 
-                send_ws_message(Arc::clone(&CONN_LIST), WsMessage::device_list(list.values().flatten().collect()).expect("Damn list didnt properly serialize"));
+                send_ws_message( WsMessage::device_list(list.values().flatten().collect()).expect("Damn list didnt properly serialize"));
 
             },
 
@@ -273,7 +367,7 @@ fn update_device(update: MQTTUpdate)
                                     return;
                                 }
                             }
-                            send_ws_message(Arc::clone(&CONN_LIST), WsMessage::device_update(device).expect("failed to parse Device"));                
+                            send_ws_message(WsMessage::device_update(device).expect("failed to parse Device"));                
 
                         }
                         

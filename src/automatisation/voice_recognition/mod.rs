@@ -6,7 +6,7 @@ pub mod voice_recognition
 
 
     #[allow(non_camel_case_types)]
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Clone)]
     pub enum ScenarioTypes
     {
         TIMED,

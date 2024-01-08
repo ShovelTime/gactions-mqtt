@@ -4,16 +4,17 @@ pub mod device_updates
     use serde::{Serialize, Deserialize};
     use serde_json::{Map, Value};
 
-    use crate::device::{device::Device, device::DeviceType};
+    use crate::{device::{device::Device, device::DeviceType}, net::client::ws_msg::ws_msg::CommandType};
 
 
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, Clone)]
     #[allow(non_camel_case_types)]
     pub enum DeviceUpdateType
     {
         CONN_CHANGE,
         ACTIVATION_CHANGE,
-        VALUE_CHANGE
+        VALUE_CHANGE,
+        ALL
     }
 
     /*
@@ -31,6 +32,12 @@ pub mod device_updates
     */
 
     #[derive(Serialize, Deserialize)]
+    pub struct MQTTStatus
+    {
+        pub connected : bool
+    }// used for topic root_online
+
+    #[derive(Serialize, Deserialize, Clone)]
     pub struct MQTTUpdate
     {
         pub update_type : DeviceUpdateType,
@@ -39,6 +46,14 @@ pub mod device_updates
         pub update_fields : Map<String, Value>
     }
 
+    //Create MQTTCommand struct with derives:
+    #[derive(Serialize, Deserialize)]
+    pub struct MQTTCommand
+    {
+        pub device_id : String,
+        pub command : CommandType
+    }
+    
     #[derive(Serialize, Deserialize)]
     pub struct MQTTList
     {
