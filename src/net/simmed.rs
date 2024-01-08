@@ -10,7 +10,7 @@ pub mod simmed
     use serde::Serialize;
     use serde_json::{Map, Value};
 
-    pub fn simulate_devices(device_list: Vec<Device>)
+    pub fn simulate_devices(mut device_list: Vec<Device>)
     {
         let mut root_online = false;
         
@@ -59,7 +59,25 @@ pub mod simmed
                         Some(msg) => {
                                 match msg.properties().get_string(mqtt::PropertyCode::ContentType).unwrap_or("unknown".to_string()).as_str()
                                 {
-                                    "device_cmd" => (),
+                                    "device_cmd" => 
+                                    {
+                                        match serde_json::from_str::<MQTTUpdate>(&msg.payload_str()){
+                                            Ok(cmd) => {
+                                                match cmd.update_type{
+                                                    DeviceUpdateType::CONN_CHANGE => todo!(),
+                                                    DeviceUpdateType::ACTIVATION_CHANGE => {
+                                                        let Some(dev) = device_list.iter_mut().find(|x| {*x == cmd.device_id}) else {continue};
+                                                        // if we get None, we dont own the device, so we dont care
+                                                        let Some(n_bool) = cmd.update_fields.get("activated") else {continue};
+                                                        dev.activated = n_bool.as_bool().unwrap_or(true);
+                                                    },
+                                                    DeviceUpdateType::VALUE_CHANGE => todo!(),
+                                                    DeviceUpdateType::ALL => todo!(),
+                                                }    
+                                            },
+                                            Err(_) => todo!(),
+                                        }
+                                    },
                                     "root_online" => {
                                         match serde_json::from_str::<MQTTStatus>(&msg.payload_str())
                                         {

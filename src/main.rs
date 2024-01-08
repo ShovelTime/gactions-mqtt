@@ -3,7 +3,7 @@ use device::device::Device;
 use home::scenarios::scenarios::Scenario;
 use net::{simmed::simmed::{simulate_devices, reattempt_connection, reattempt_connection_async}, device_update::device_updates::{MQTTUpdate, MQTTList, MQTTStatus}, client::{ws_conn::messaging::{WsConn, send_ws_message, ws_conn_request}, ws_msg::ws_msg::WsMessage}};
 use once_cell::sync::Lazy;
-use tokio::{net::TcpListener, sync::{broadcast::{*, self}, mpsc::UnboundedSender}};
+use tokio::{net::TcpListener, sync::{broadcast::{*, self}, mpsc::{UnboundedSender, unbounded_channel, UnboundedReceiver}}};
 use std::{sync::{RwLock, Arc, atomic::AtomicUsize}, any::Any, time::Duration};
 use paho_mqtt::{Message, Client, ConnectOptions, AsyncClient, ConnectOptionsBuilder, MessageBuilder, Properties, PropertyCode, Error};
 use crate::{device::device::DeviceType, net::device_update::device_updates::DeviceUpdateType};
@@ -26,14 +26,18 @@ pub static SCENARIO_COUNTER : AtomicUsize = AtomicUsize::new(0); //yes this will
 
 pub static SCENARIO_LIST : Lazy<Arc<RwLock<Vec<Box<dyn Scenario + Sync + Send>>>>> = Lazy::new(|| {Arc::new(RwLock::new(Vec::new()))});
 
-pub const MQTT_SENDER : Lazy<broadcast::Sender<MQTTUpdate>> = Lazy::new(|| {broadcast::channel(1000).0}); 
+pub const MQTT_SENDER : Lazy<Option<UnboundedSender<MQTTUpdate>>> = Lazy::new(|| {None}); 
 
 #[deny(clippy::unwrap_used)]
 #[tokio::main(worker_threads = 8)]
 async fn main() {
 
+
+
     let device_container : Arc<RwLock<HashMap<String, Vec<Device>>>> = Arc::new(RwLock::new(HashMap::new::<>()));
     let conn_list : Arc<RwLock<Vec<WeakAddr<WsConn>>>> = Arc::new(RwLock::new(Vec::new()));
+    let (tx, rx) = unbounded_channel::<MQTTUpdate>();
+    MQTT_SENDER.insert(tx.clone());
     
     {
         let mut device_hash = device_container.write().expect("Failed to lock device container!, this should never happen");
@@ -60,12 +64,7 @@ async fn main() {
     });
     */
 
-    HttpServer::new(move || { 
-        App::new().route("/ws", web::get().to(ws_conn_request))
-    })
-    .bind("0.0.0.0:18337").expect("Failed to start Websocket Listener!")
-    .run()
-    .await.expect("Failed to start HTTP Server");
+
 
     let mut props = Properties::new();
     props.push_val(PropertyCode::PayloadFormatIndicator, 1).expect("failed to add property");
@@ -96,7 +95,9 @@ async fn main() {
             .finalize();
         a_cli.publish(online);        
     });
+    println!("connecting");
     let conn_token = a_client.connect(conn_options.clone()).await;
+    println!("conn finished");
     let mqtt_arc = Arc::new(a_client);
     let opt_arc = Arc::new(conn_options);
 
@@ -124,13 +125,14 @@ async fn main() {
     let conn_opts = Arc::clone(&opt_arc);
     tokio::spawn(async move{
         
-        let mut recv = MQTT_SENDER.subscribe();
+        let mut recv = rx;
+        
         let mut dev_props = Properties::new();
         dev_props.push_val(PropertyCode::PayloadFormatIndicator, 1).expect("failed to add property");
         dev_props.push_string(PropertyCode::ContentType, "device_update").expect("failed to add property");
         loop
         {
-            let msg = recv.recv().await.expect("This should never crash, yet here we are");
+            let msg = recv.recv().await.expect("This sould not crash, otherwise it means that the channel closed on its creation");
 
             let update_payload = serde_json::to_vec(&msg);
             match update_payload {
@@ -163,6 +165,13 @@ async fn main() {
         }
     });
 
+
+    HttpServer::new(move || { 
+        App::new().route("/ws", web::get().to(ws_conn_request))
+    })
+    .bind("0.0.0.0:18337").expect("Failed to start Websocket Listener!")
+    .run()
+    .await.expect("Failed to start HTTP Server");
     let _ = sim_thread.join();
 
 
