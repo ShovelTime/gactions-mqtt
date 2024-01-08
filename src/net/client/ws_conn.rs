@@ -46,6 +46,10 @@ pub mod messaging{
                 ctx.ping(b"ping");
                 
             });
+
+            ctx.text(serde_json::to_string(&WsMessage::device_list(DEVICE_CONTAINER.read().unwrap().values().flatten().collect()).unwrap()).unwrap());
+            //TODO: Fix sending Scenario List
+            
                 
             
         }

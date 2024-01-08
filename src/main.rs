@@ -48,12 +48,23 @@ async fn main() {
 
     let sim_thread =thread::spawn(move || // Simulated Devices
     {
-        let device = Device::new(
+        let temp_device = Device::new(
                 "Temperature sensor1".to_string(),
                 DeviceType::TempSensor,
-                "".to_string(),
+                "Temperature Sensor".to_string(),
                 "temp1".to_string());
-        simulate_devices(vec!(device));
+        let lux_device = Device::new(
+                "Lux Sensor1".to_string(),
+                DeviceType::LuxSensor,
+                "Lux Sensor".to_string(),
+                "lux1".to_string());
+        let lamp_device = Device::new(
+                "Lamp1".to_string(),
+                DeviceType::Light,
+                "Lamp".to_string(),
+                "lamp1".to_string());
+
+        simulate_devices(vec!(temp_device, lux_device, lamp_device));
     });
 
     /*

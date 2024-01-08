@@ -15,7 +15,7 @@ pub mod ws_msg
     use actix::Message;
     use serde::{Serialize, Deserialize};
 
-    use crate::{device::device::Device, automatisation::voice_recognition::voice_recognition::ScenarioTypes, typedef::typedef::DeviceId};
+    use crate::{device::device::Device, automatisation::voice_recognition::voice_recognition::ScenarioTypes, typedef::typedef::DeviceId, home::scenarios::scenarios::Scenario};
 
     #[derive(Serialize, Deserialize, Debug, Message, Clone)]
     #[rtype(result = "Result<(), serde_json::Error>")]
@@ -76,6 +76,7 @@ pub mod ws_msg
             }
 
         }
+
         
         pub fn error(message : String) -> WsMessage
         {
@@ -248,6 +249,12 @@ pub mod ws_msg
     {
         pub device_id : String,
         pub key_to_read : String
+    }
+
+    #[derive(Serialize,Deserialize)]
+    pub struct PayloadScenarioList
+    {
+            list : Vec<PayloadScenarioUpdate>
     }
 }
 

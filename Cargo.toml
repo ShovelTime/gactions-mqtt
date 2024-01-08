@@ -6,8 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-paho-mqtt = "0.12.3"
-#bincode = "1.3.3"
 picovoice = "3.0.2"
 actix = "0.13.1"
 actix-web = "4.4.1"
@@ -20,6 +18,11 @@ once_cell = "1.19.0"
 #[dependencies.pyo3]
 #version = "0.20.0"
 #features = ["auto-initialize"]
+
+[dependencies.paho-mqtt]
+default-features = true 
+feature = ["vendored-ssl"]
+version = "0.12.3"
 
 [dependencies.chrono]
 feature = ["serde"]
