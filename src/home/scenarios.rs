@@ -93,7 +93,7 @@ pub mod scenarios
                         let mut map = Map::<String, Value>::new();
                         map.insert("activated".to_string(), n_activated.to_string().into());
                         let update = MQTTUpdate{ update_type: DeviceUpdateType::ACTIVATION_CHANGE, device_id: device.get_id().to_string(), topic: device.topic.clone(), update_fields: map };
-                        let _ = MQTT_SENDER.clone().unwrap().send(update);
+                        let _ = MQTT_SENDER.read().unwrap().clone().unwrap().send(update);
                         remove_scenario(s_id);
 
                     }
@@ -187,7 +187,7 @@ pub mod scenarios
                         let mut map = Map::<String, Value>::new();
                         map.insert("activated".to_string(), n_activated.to_string().into());
                         let update = MQTTUpdate{ update_type: DeviceUpdateType::ACTIVATION_CHANGE, device_id: tgt_dev, topic: tgt.topic.clone(), update_fields: map };
-                        let _ = MQTT_SENDER.clone().unwrap().send(update);
+                        let _ = MQTT_SENDER.read().unwrap().clone().unwrap().send(update);
                         drop(w_lock);
                         remove_scenario(s_id);
                         return;

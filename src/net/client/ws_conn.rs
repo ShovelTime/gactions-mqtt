@@ -123,7 +123,7 @@ pub mod messaging{
                                                     mqtt_map.insert("activated".to_string(), tgt_dev.activated.to_string().into());
                                                     let update = MQTTUpdate{ update_type: DeviceUpdateType::ACTIVATION_CHANGE, device_id: payload.device_id, topic:tgt_dev.topic.clone() , update_fields: mqtt_map };
                                                     drop(map);
-                                                    let _ = MQTT_SENDER.clone().unwrap().send(update);
+                                                    let _ = MQTT_SENDER.read().unwrap().clone().unwrap().send(update);
                                                     send_ws_message(n_msg); 
 
 

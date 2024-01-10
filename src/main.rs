@@ -27,7 +27,7 @@ pub static SCENARIO_COUNTER : AtomicUsize = AtomicUsize::new(0); //yes this will
 pub static DEVICE_COUNTER : Lazy<Mutex<DeviceCounters>> = Lazy::new(|| { Mutex::new(DeviceCounters::new())});
 pub static SCENARIO_LIST : Lazy<Arc<RwLock<Vec<Box<dyn Scenario + Sync + Send>>>>> = Lazy::new(|| {Arc::new(RwLock::new(Vec::new()))});
 
-pub const MQTT_SENDER : Lazy<Option<UnboundedSender<MQTTUpdate>>> = Lazy::new(|| {None}); 
+pub const MQTT_SENDER : Lazy<RwLock<Option<UnboundedSender<MQTTUpdate>>>> = Lazy::new(|| {RwLock::new(None)}); 
 
 #[deny(clippy::unwrap_used)]
 #[tokio::main(worker_threads = 8)]
@@ -38,13 +38,15 @@ async fn main() {
     let device_container : Arc<RwLock<HashMap<String, Vec<Device>>>> = Arc::new(RwLock::new(HashMap::new::<>()));
     let conn_list : Arc<RwLock<Vec<WeakAddr<WsConn>>>> = Arc::new(RwLock::new(Vec::new()));
     let (tx, rx) = unbounded_channel::<MQTTUpdate>();
-    MQTT_SENDER.insert(tx.clone());
+    MQTT_SENDER.write().unwrap().insert(tx.clone());
     
     {
+        /*
         let mut device_hash = device_container.write().expect("Failed to lock device container!, this should never happen");
         let device1 = Device::new(DeviceType::TempSensor, "Temperature 1".to_string(), "temperature".to_string());
         device_hash.insert("temperature".to_string(), Vec::new());
         device_hash.get_mut("temperature").expect("wait litterally how did we panic here").push(device1)
+        */
     }
 
     let sim_thread =thread::spawn(move || // Simulated Devices
