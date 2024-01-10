@@ -1,14 +1,14 @@
 use actix::WeakAddr;
 use device::device::{Device, DeviceCounters};
 use home::scenarios::scenarios::Scenario;
-use net::{simmed::simmed::{simulate_devices, reattempt_connection, reattempt_connection_async}, device_update::device_updates::{MQTTUpdate, MQTTList, MQTTStatus}, client::{ws_conn::messaging::{WsConn, send_ws_message, ws_conn_request}, ws_msg::ws_msg::WsMessage}};
+use net::{simmed::simmed::{simulate_devices, reattempt_connection_async}, device_update::device_updates::{MQTTUpdate, MQTTList, MQTTStatus}, client::{ws_conn::messaging::{WsConn, send_ws_message, ws_conn_request}, ws_msg::ws_msg::WsMessage}};
 use once_cell::sync::Lazy;
-use tokio::{net::TcpListener, sync::{broadcast::{*, self}, mpsc::{UnboundedSender, unbounded_channel, UnboundedReceiver}, }};
-use std::{sync::{RwLock, Mutex, Arc, atomic::AtomicUsize}, any::Any, time::Duration};
+use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
+use std::{sync::{RwLock, Mutex, Arc, atomic::AtomicUsize}, time::Duration};
 use paho_mqtt::{Message, Client, ConnectOptions, AsyncClient, ConnectOptionsBuilder, MessageBuilder, Properties, PropertyCode, Error};
 use crate::{device::device::DeviceType, net::device_update::device_updates::DeviceUpdateType};
 use std::{thread, collections::HashMap};
-use actix_web::{App, HttpServer, web::{Data, self}};
+use actix_web::{App, HttpServer, web::{self}};
 
 pub mod automatisation;
 pub mod home;
@@ -35,10 +35,10 @@ async fn main() {
 
 
 
-    let device_container : Arc<RwLock<HashMap<String, Vec<Device>>>> = Arc::new(RwLock::new(HashMap::new::<>()));
-    let conn_list : Arc<RwLock<Vec<WeakAddr<WsConn>>>> = Arc::new(RwLock::new(Vec::new()));
+    let _device_container : Arc<RwLock<HashMap<String, Vec<Device>>>> = Arc::new(RwLock::new(HashMap::new::<>()));
+    let _conn_list : Arc<RwLock<Vec<WeakAddr<WsConn>>>> = Arc::new(RwLock::new(Vec::new()));
     let (tx, rx) = unbounded_channel::<MQTTUpdate>();
-    MQTT_SENDER.write().unwrap().insert(tx.clone());
+    let _ = MQTT_SENDER.write().unwrap().insert(tx.clone());
     
     {
         /*

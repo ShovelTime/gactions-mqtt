@@ -1,12 +1,12 @@
 pub mod scenarios
 {
-    use std::{collections::HashMap, sync::{RwLock, Arc, atomic::Ordering}, ops::Range, };
+    use std::{sync::atomic::Ordering, ops::Range, };
 
-    use actix::WeakAddr;
+    
     use serde_json::{Value, Map};
     use tokio::time::{sleep_until, Instant, Duration};
 
-    use crate::{device::device::Device, net::{client::{ws_conn::messaging::{WsConn, send_ws_message, send_ws_message_async}, ws_msg::ws_msg::{WsMessage, WsMessageType}}, device_update::device_updates::{MQTTUpdate, DeviceUpdateType}}, typedef::typedef::{DeviceId, ScenarioId}, SCENARIO_COUNTER, SCENARIO_LIST, DEVICE_CONTAINER, automatisation::voice_recognition::voice_recognition::ScenarioTypes, MQTT_SENDER};
+    use crate::{net::{client::{ws_conn::messaging::send_ws_message, ws_msg::ws_msg::WsMessage}, device_update::device_updates::{MQTTUpdate, DeviceUpdateType}}, typedef::typedef::{DeviceId, ScenarioId}, SCENARIO_COUNTER, SCENARIO_LIST, DEVICE_CONTAINER, automatisation::voice_recognition::voice_recognition::ScenarioTypes, MQTT_SENDER};
 
     pub trait Scenario
     {
@@ -111,7 +111,7 @@ pub mod scenarios
     {
         s_id : usize,
         sensor_id : DeviceId,
-        sensor : Device,
+        //sensor : Device,
         treshold : Range<i32>,
         tgt_dev : DeviceId
 
@@ -142,20 +142,22 @@ pub mod scenarios
         pub fn new(sensor_id : DeviceId, treshold : Range<i32>, tgt_dev: DeviceId) -> Result<usize, &'static str>
         {
 
-            let dev; 
+            //let dev; 
+            /*
             {
                 let dev_lock = DEVICE_CONTAINER.read().expect("Device list poisoned!");
                 let mut dev_list = dev_lock.values().flatten();
                 if !dev_list.clone().any(|x| {*x == tgt_dev}) {return Err("target device not found!")}
-                let Some(res) = dev_list.find(|x| { *x == sensor_id}) else {return Err("Sensor not found!")};
+                let Some(_res) = dev_list.find(|x| { *x == sensor_id}) else {return Err("Sensor not found!")};
                 dev = res.clone()
             }
+            */
             let mut lock = SCENARIO_LIST.write().expect("Scenario list went byebye");
             let id = SCENARIO_COUNTER.fetch_add(1, Ordering::SeqCst);
             lock.push(Box::new(ConditionalTrigger{
                 s_id : id,
                 sensor_id,
-                sensor: dev,
+                //sensor: dev,
                 treshold,
                 tgt_dev
             }));

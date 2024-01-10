@@ -4,7 +4,7 @@ pub mod device_updates
     use serde::{Serialize, Deserialize};
     use serde_json::{Map, Value};
 
-    use crate::{device::{device::Device, device::DeviceType}, net::client::ws_msg::ws_msg::CommandType};
+    use crate::{device::{device::Device}, net::client::ws_msg::ws_msg::CommandType};
 
 
     #[derive(Serialize, Deserialize, Clone)]

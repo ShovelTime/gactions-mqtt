@@ -1,4 +1,4 @@
-pub mod room {
+/* pub mod room {
 
     use crate::{device::device::Device, typedef::typedef::RoomId};
 
@@ -7,3 +7,5 @@ pub mod room {
         device_list: Vec<Device>,
     }
 }
+*
+* */

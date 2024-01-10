@@ -4,21 +4,21 @@ pub mod messaging{
     static TIMEOUT_DELAY : Duration = Duration::from_secs(10);
     // Open WS connection;
 
-    use std::{time::{Duration, Instant}, ops::{Deref, Range}, collections::HashMap, sync::{RwLock, Arc}};
+    use std::{time::{Duration, Instant}, ops::{Deref, Range}};
 
-    use actix_web::web::Data;
-    use actix_web_actors::ws::{self, WebsocketContext, WsResponseBuilder};
-    use actix::{Actor, StreamHandler, AsyncContext, ActorContext, Addr, SpawnHandle, Handler, WeakAddr};
+    
+    use actix_web_actors::ws::{self, WsResponseBuilder};
+    use actix::{Actor, StreamHandler, AsyncContext, ActorContext, Handler, WeakAddr};
     use actix_web::{web, Error, HttpRequest, HttpResponse, http::StatusCode};
-    use chrono::{DateTime, Utc, FixedOffset, Local};
+    use chrono::{DateTime, FixedOffset, Local};
     use serde_json::{Map, Value};
-    use tokio::sync::broadcast::{Receiver, self};
+    
 
     use crate::{net::{client::ws_msg::ws_msg::{WsMessage, WsMessageType, PayloadDeviceUpdate, PayloadGetValue, PayloadScenarioUpdate, PayloadScenarioTimedToggle, PayloadDeviceCommand, CommandType, PayloadScenarioSensorConditional}, device_update::device_updates::{MQTTUpdate, DeviceUpdateType}}, home::scenarios::scenarios::{TimedToggle, ConditionalTrigger}, CONN_LIST, ws_error, DEVICE_CONTAINER, automatisation::voice_recognition::voice_recognition::ScenarioTypes, SCENARIO_LIST, MQTT_SENDER};
     pub struct WsConn
     {
         hb : Instant,
-        continuation_buf : Vec<u8>,
+        //continuation_buf : Vec<u8>,
         self_addr : Option<WeakAddr<Self>>,
     }
     
@@ -26,7 +26,9 @@ pub mod messaging{
 
         pub fn new() -> WsConn
         {
-            WsConn{hb: Instant::now(),  self_addr : None, continuation_buf: Vec::new()}
+            WsConn{hb: Instant::now(),  self_addr : None, 
+                //continuation_buf: Vec::new()
+            }
             
         }
     }
@@ -250,12 +252,12 @@ pub mod messaging{
                             }
 
                         },
-                        ws::Message::Continuation(cont) => todo!(), 
+                        ws::Message::Continuation(_cont) => todo!(), 
                         ws::Message::Close(opt) =>
                         {
                             ctx.close(opt)
                         }
-                        ws::Message::Text(text) => todo!(),
+                        ws::Message::Text(_text) => todo!(),
                         ws::Message::Nop => (), // Wat
                     }
                 }

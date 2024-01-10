@@ -21,7 +21,7 @@ pub mod device {
         {
             if !self.counters.keys().any(|x| *x == in_type)
             {
-                let res = self.counters.insert(in_type.clone(), AtomicUsize::new(0));
+                let _res = self.counters.insert(in_type.clone(), AtomicUsize::new(0));
         
             } 
             return self.counters.get(&in_type).unwrap().fetch_add(1,Ordering::SeqCst);   
@@ -48,7 +48,7 @@ pub mod device {
         value: Option<String>,
     }
     impl Device{
-        pub fn new(device_type: DeviceType, name : String, topic: Topic) -> Device
+        pub fn new(device_type: DeviceType, _name : String, topic: Topic) -> Device
         {
 
             

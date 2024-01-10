@@ -7,7 +7,7 @@ pub mod simmed
     use mqtt::{ConnectOptions, MessageBuilder, Properties, Message};
     use paho_mqtt as mqtt;
     use rand::{thread_rng, Rng};
-    use serde::Serialize;
+    
     use serde_json::{Map, Value};
 
     pub fn simulate_devices(mut device_list: Vec<Device>)
@@ -134,7 +134,7 @@ pub mod simmed
                     },
 
                     //Programmer fucked up lmao. But it doesnt need to crash since this is just mocking.
-                    _ => continue
+                    //_ => continue
                 }
 
                 if !root_online {continue};
