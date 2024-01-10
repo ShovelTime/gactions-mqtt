@@ -44,7 +44,7 @@ pub mod messaging{
                                             match serde_json::from_str::<PayloadDeviceCommand>(&wsmsg.payload){
                                                 Ok(payload) => {
                                                     let Ok(mut map) = DEVICE_CONTAINER.write() else {println!("hashmap poisoned!"); return};
-                                                    let Some(tgt_dev) = map.values_mut().flatten().find(|d| {*d == payload.device_id}) else {println!("Failed to find device : {}!", payload.device_id); return};
+                                                    let Some(tgt_dev) = map.values_mut().flatten().find(|d| {*d.get_id() == payload.device_id}) else {println!("Failed to find device : {}!", payload.device_id); return};
                                                     match payload.command{
                                                         CommandType::TOGGLE => tgt_dev.toggle(),
                                                         CommandType::ENABLE => tgt_dev.activated = true,
@@ -73,7 +73,14 @@ pub mod messaging{
                                             match serde_json::from_str::<PayloadDeviceUpdate>(&wsmsg.payload){
                                                 Ok(payload) => {
                                                             let Ok(mut map) = DEVICE_CONTAINER.write() else {return};
-                                                            let Some(dev) = map.get_mut(&payload.device.topic) else {return};
+                                                            let dev = {
+                                                                if !map.contains_key(&payload.device.topic)
+                                                                {
+                                                                    map.insert(payload.device.topic.clone(), Vec::new());
+                                                                }
+                                                                map.get_mut(&payload.device.topic).unwrap()
+
+                                                            };
                                                             let Some(tgt_dev) = dev.iter_mut().find(|d| **d == payload.device) else {return};
                                                             tgt_dev.update(&payload.device);
                                                             drop(map);
