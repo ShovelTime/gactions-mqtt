@@ -365,8 +365,8 @@ fn update_device(update: MQTTUpdate)
                                     device.connected = connected;
                                 }
                                 DeviceUpdateType::ACTIVATION_CHANGE => {
-                                    let Some(value) = update.update_fields.get("connected") else {
-                                        println!("A activation update was received, but no connected field was provided! Printing payload: \n\n {}", serde_json::to_string(&update).unwrap_or("PARSE FAILED".to_string()));
+                                    let Some(value) = update.update_fields.get("activated") else {
+                                        println!("A activation update was received, but no activated field was provided! Printing payload: \n\n {}", serde_json::to_string(&update).unwrap_or("PARSE FAILED".to_string()));
                                         return;
                                     };
                                     let Some(activated) = value.as_bool() else {
