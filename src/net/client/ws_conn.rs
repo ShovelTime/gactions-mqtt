@@ -33,6 +33,7 @@ pub mod messaging{
         }
         fn handle_payload(&mut self, bytes : Bytes, ctx : &mut <Self as Actor>::Context)
         {
+                        println!("message received!");
                         let dat_slice: &[u8] = bytes.deref();
                             match serde_json::from_slice::<WsMessage>(dat_slice)
                             {
@@ -51,6 +52,7 @@ pub mod messaging{
                                                         CommandType::UNKNOWN => {ctx.text(ws_error!(format!("Unknown Command Type! {}", wsmsg.payload))); return},
                                                     }
                                                     let n_msg = WsMessage::device_update(tgt_dev).expect("device parsing failed");
+                                                    println!("Sending Device Update Payload after command, \n {:?}", n_msg);
 
                                                     
                                                     let mut mqtt_map = Map::<String, Value>::new();
