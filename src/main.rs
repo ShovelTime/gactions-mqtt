@@ -357,7 +357,7 @@ fn update_device(update: MQTTUpdate)
                                         println!("A connection update was received, but no connected field was provided! Printing payload: \n\n {}", serde_json::to_string(&update).unwrap_or("PARSE FAILED".to_string()));
                                         return;
                                     };
-                                    let Some(connected) = value.as_bool() else {
+                                    let Ok(connected) = value.as_str().unwrap_or("unknown").parse() else {
                                         println!("value at connected is not a boolean! Printing payload: \n\n {}", serde_json::to_string(&update).unwrap_or("PARSE FAILED".to_string()));
                                         return;
                                     };
@@ -369,7 +369,7 @@ fn update_device(update: MQTTUpdate)
                                         println!("A activation update was received, but no activated field was provided! Printing payload: \n\n {}", serde_json::to_string(&update).unwrap_or("PARSE FAILED".to_string()));
                                         return;
                                     };
-                                    let Some(activated) = value.as_bool() else {
+                                    let Ok(activated) = value.as_str().unwrap_or("unknown").parse() else {
                                         println!("value at activated is not a boolean! Printing payload: \n\n {}", serde_json::to_string(&update).unwrap_or("PARSE FAILED".to_string()));
                                         return;
                                     };
