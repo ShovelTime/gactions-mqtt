@@ -180,6 +180,8 @@ pub mod messaging{
                                 },
                                 Err(e) => 
                                 {
+
+                                    println!("Message Deserialization Error : {}", e.to_string());
                                     ctx.text(ws_error!(format!("Message Deserialization error: {}", e.to_string())))
 
                                 }
