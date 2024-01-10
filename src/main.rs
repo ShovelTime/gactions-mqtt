@@ -27,7 +27,7 @@ pub static SCENARIO_COUNTER : AtomicUsize = AtomicUsize::new(0); //yes this will
 pub static DEVICE_COUNTER : Lazy<Mutex<DeviceCounters>> = Lazy::new(|| { Mutex::new(DeviceCounters::new())});
 pub static SCENARIO_LIST : Lazy<Arc<RwLock<Vec<Box<dyn Scenario + Sync + Send>>>>> = Lazy::new(|| {Arc::new(RwLock::new(Vec::new()))});
 
-pub const MQTT_SENDER : Lazy<RwLock<Option<UnboundedSender<MQTTUpdate>>>> = Lazy::new(|| {RwLock::new(None)}); 
+pub const MQTT_SENDER : Lazy<Arc<RwLock<Option<UnboundedSender<MQTTUpdate>>>>> = Lazy::new(|| {Arc::new(RwLock::new(None))}); 
 
 #[deny(clippy::unwrap_used)]
 #[tokio::main(worker_threads = 8)]
