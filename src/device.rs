@@ -3,10 +3,31 @@ pub mod device {
     use serde::{Serialize, Deserialize};
 
     use crate::typedef::typedef::{DeviceId, Topic};
+    use std::{sync::atomic::{AtomicUsize, Ordering}, collections::HashMap};
 
 
+    pub struct DeviceCounters
+    {
+            counters : HashMap<DeviceType, AtomicUsize>,
+    }
+    impl DeviceCounters
+    {
+        pub fn new() -> DeviceCounters
+        {
+            DeviceCounters { counters: HashMap::new()}
+        }
 
-    #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+        pub fn get_num(&self, in_type : DeviceType) -> usize
+        {
+            if !self.counters.keys().any(|x| *x == in_type)
+            {
+                let res = self.counters.insert(in_type.clone(), AtomicUsize::new(0));
+        
+            } 
+            return self.counters.get(&in_type).unwrap().fetch_add(1,Ordering::SeqCst);   
+
+
+    #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
     pub enum DeviceType
     {
         TempSensor,
@@ -25,10 +46,22 @@ pub mod device {
         value: Option<String>,
     }
     impl Device{
-        pub fn new(device_id: String, device_type: DeviceType, name : String, topic: Topic) -> Device
+        pub fn new(device_type: DeviceType, name : String, topic: Topic) -> Device
         {
 
-            Device { device_id: device_id, device_type: device_type, name: name, connected: true, activated: true, value: None, topic: topic }
+            ;
+            let name : String;
+            match device_type
+            {
+                DeviceType::TempSensor => { name = "Temp ".to_string(); },
+
+                DeviceType::LuxSensor => { name = "Lux ".to_string(); },
+                DeviceType::Light => { name = "Light ".to_string();},
+            }
+
+            let device_id = format!( "{} {}", name, DEVICE_COUNTER.get_num(device_type));
+
+            Device { device_id, device_type, name, connected: true, activated: true, value: None, topic }
         }
         pub fn get_id(&self) -> &String
         {

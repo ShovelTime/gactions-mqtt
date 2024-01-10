@@ -1,5 +1,5 @@
 use actix::WeakAddr;
-use device::device::Device;
+use device::device::{Device, DeviceCounters};
 use home::scenarios::scenarios::Scenario;
 use net::{simmed::simmed::{simulate_devices, reattempt_connection, reattempt_connection_async}, device_update::device_updates::{MQTTUpdate, MQTTList, MQTTStatus}, client::{ws_conn::messaging::{WsConn, send_ws_message, ws_conn_request}, ws_msg::ws_msg::WsMessage}};
 use once_cell::sync::Lazy;
@@ -24,6 +24,7 @@ pub static CONN_LIST : Lazy<Arc<RwLock<Vec<WeakAddr<WsConn>>>>> = Lazy::new(|| {
 pub static SCENARIO_COUNTER : AtomicUsize = AtomicUsize::new(0); //yes this will eventually
 //crash in a few hundred years, too bad!
 
+pub static DEVICE_COUNTER : Lazy<DeviceCounters> = Lazy::new(|| { DeviceCounters::new()});
 pub static SCENARIO_LIST : Lazy<Arc<RwLock<Vec<Box<dyn Scenario + Sync + Send>>>>> = Lazy::new(|| {Arc::new(RwLock::new(Vec::new()))});
 
 pub const MQTT_SENDER : Lazy<Option<UnboundedSender<MQTTUpdate>>> = Lazy::new(|| {None}); 
