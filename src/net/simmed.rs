@@ -140,7 +140,7 @@ pub mod simmed
                 if !root_online {continue};
 
                 let updated_device = MQTTUpdate{
-                    update_type : update_type,
+                    update_type,
                     device_id: device.get_id().to_string(),
                     topic: device.topic.clone(),
                     update_fields : new_val
