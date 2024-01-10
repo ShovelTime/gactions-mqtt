@@ -9,24 +9,26 @@ pub mod messaging{
     
     use actix_web_actors::ws::{self, WsResponseBuilder};
     use actix::{Actor, StreamHandler, AsyncContext, ActorContext, Handler, WeakAddr};
-    use actix_web::{web::{self, Bytes}, Error, HttpRequest, HttpResponse, http::StatusCode};
+    use actix_web::{web::{self, Bytes, Data}, Error, HttpRequest, HttpResponse, http::StatusCode};
     use chrono::{DateTime, FixedOffset, Local};
     use serde_json::{Map, Value};
+    use tokio::sync::mpsc::UnboundedSender;
     
 
-    use crate::{net::{client::ws_msg::ws_msg::{WsMessage, WsMessageType, PayloadDeviceUpdate, PayloadGetValue, PayloadScenarioUpdate, PayloadScenarioTimedToggle, PayloadDeviceCommand, CommandType, PayloadScenarioSensorConditional}, device_update::device_updates::{MQTTUpdate, DeviceUpdateType}}, home::scenarios::scenarios::{TimedToggle, ConditionalTrigger}, CONN_LIST, ws_error, DEVICE_CONTAINER, automatisation::voice_recognition::voice_recognition::ScenarioTypes, SCENARIO_LIST, MQTT_SENDER, device::device::Device};
+    use crate::{net::{client::ws_msg::ws_msg::{WsMessage, WsMessageType, PayloadDeviceUpdate, PayloadGetValue, PayloadScenarioUpdate, PayloadScenarioTimedToggle, PayloadDeviceCommand, CommandType, PayloadScenarioSensorConditional}, device_update::device_updates::{MQTTUpdate, DeviceUpdateType}}, home::scenarios::scenarios::{TimedToggle, ConditionalTrigger}, CONN_LIST, ws_error, DEVICE_CONTAINER, automatisation::voice_recognition::voice_recognition::ScenarioTypes, SCENARIO_LIST, device::device::Device};
     pub struct WsConn
     {
         hb : Instant,
         //continuation_buf : Vec<u8>,
         self_addr : Option<WeakAddr<Self>>,
+        tx : UnboundedSender<MQTTUpdate>
     }
     
     impl WsConn{
 
-        pub fn new() -> WsConn
+        pub fn new(tx: UnboundedSender<MQTTUpdate>) -> WsConn
         {
-            WsConn{hb: Instant::now(),  self_addr : None, 
+            WsConn{hb: Instant::now(),  self_addr : None, tx 
                 //continuation_buf: Vec::new()
             }
             
@@ -59,7 +61,7 @@ pub mod messaging{
                                                     mqtt_map.insert("activated".to_string(), tgt_dev.activated.to_string().into());
                                                     let update = MQTTUpdate{ update_type: DeviceUpdateType::ACTIVATION_CHANGE, device_id: payload.device_id, topic:tgt_dev.topic.clone() , update_fields: mqtt_map };
                                                     drop(map);
-                                                    let _ = MQTT_SENDER.read().unwrap().clone().unwrap().send(update);
+                                                    let _ = self.tx.send(update);
                                                     send_ws_message(n_msg); 
 
 
@@ -332,9 +334,11 @@ pub mod messaging{
     pub async fn ws_conn_request(
         req: HttpRequest,
         stream: web::Payload,
+        tx_dat: Data<UnboundedSender<MQTTUpdate>>
     ) -> Result<HttpResponse, Error>
     {
-        let ws_instance = WsConn::new();
+        let ws_instance = WsConn::new(tx_dat.into_inner().deref().clone());
+
         let ws_conn = WsResponseBuilder::new(ws_instance, &req, stream);
         
         match ws_conn.start_with_addr()

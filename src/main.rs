@@ -8,7 +8,7 @@ use std::{sync::{RwLock, Mutex, Arc, atomic::AtomicUsize}, time::Duration};
 use paho_mqtt::{Message, Client, ConnectOptions, AsyncClient, ConnectOptionsBuilder, MessageBuilder, Properties, PropertyCode, Error};
 use crate::{device::device::DeviceType, net::device_update::device_updates::DeviceUpdateType};
 use std::{thread, collections::HashMap};
-use actix_web::{App, HttpServer, web::{self}};
+use actix_web::{App, HttpServer, web::{self, Data}};
 
 pub mod automatisation;
 pub mod home;
@@ -27,7 +27,7 @@ pub static SCENARIO_COUNTER : AtomicUsize = AtomicUsize::new(0); //yes this will
 pub static DEVICE_COUNTER : Lazy<Mutex<DeviceCounters>> = Lazy::new(|| { Mutex::new(DeviceCounters::new())});
 pub static SCENARIO_LIST : Lazy<Arc<RwLock<Vec<Box<dyn Scenario + Sync + Send>>>>> = Lazy::new(|| {Arc::new(RwLock::new(Vec::new()))});
 
-pub const MQTT_SENDER : Lazy<Arc<RwLock<Option<UnboundedSender<MQTTUpdate>>>>> = Lazy::new(|| {Arc::new(RwLock::new(None))}); 
+//pub const MQTT_SENDER : Lazy<Arc<RwLock<Option<UnboundedSender<MQTTUpdate>>>>> = Lazy::new(|| {Arc::new(RwLock::new(None))}); 
 
 #[deny(clippy::unwrap_used)]
 #[tokio::main(worker_threads = 8)]
@@ -38,7 +38,7 @@ async fn main() {
     let _device_container : Arc<RwLock<HashMap<String, Vec<Device>>>> = Arc::new(RwLock::new(HashMap::new::<>()));
     let _conn_list : Arc<RwLock<Vec<WeakAddr<WsConn>>>> = Arc::new(RwLock::new(Vec::new()));
     let (tx, rx) = unbounded_channel::<MQTTUpdate>();
-    let _ = MQTT_SENDER.write().unwrap().insert(tx.clone());
+    let tx_dat = Data::new(tx);
     
     {
         /*
@@ -178,7 +178,9 @@ async fn main() {
 
 
     HttpServer::new(move || { 
-        App::new().route("/ws", web::get().to(ws_conn_request))
+        App::new()
+        .app_data(Data::clone(&tx_dat))
+        .route("/ws", web::get().to(ws_conn_request))
     })
     .bind("0.0.0.0:18337").expect("Failed to start Websocket Listener!")
     .run()
