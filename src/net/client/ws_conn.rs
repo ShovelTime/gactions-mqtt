@@ -37,6 +37,7 @@ pub mod messaging{
         type Context = ws::WebsocketContext<Self>;
     
         fn started(&mut self, ctx: &mut Self::Context) {
+            println!("WS Connection Opened!");
             self.self_addr = Some(ctx.address().downgrade());
             ctx.run_interval(HEARTBEAT_DELAY, |act, ctx| {
                 if Instant::now().duration_since(act.hb) > TIMEOUT_DELAY
