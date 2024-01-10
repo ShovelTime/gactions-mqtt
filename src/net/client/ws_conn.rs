@@ -34,7 +34,7 @@ pub mod messaging{
         fn handle_payload(&mut self, bytes : Bytes, ctx : &mut <Self as Actor>::Context)
         {
                             let dat_slice: &[u8] = bytes.deref();
-                            println!("message received! \n {:?}", serde_json::to_string(dat_slice).unwrap());
+                            println!("message received! \n {:?}", serde_json::from_slice::<WsMessage>(dat_slice).unwrap());
                             match serde_json::from_slice::<WsMessage>(dat_slice)
                             {
                                 Ok(wsmsg) => {
@@ -43,8 +43,8 @@ pub mod messaging{
                                         WsMessageType::DEVICE_CMD => {
                                             match serde_json::from_str::<PayloadDeviceCommand>(&wsmsg.payload){
                                                 Ok(payload) => {
-                                                    let Ok(mut map) = DEVICE_CONTAINER.write() else {return};
-                                                    let Some(tgt_dev) = map.values_mut().flatten().find(|d| {*d == payload.device_id}) else {return};
+                                                    let Ok(mut map) = DEVICE_CONTAINER.write() else {println!("hashmap poisoned!"); return};
+                                                    let Some(tgt_dev) = map.values_mut().flatten().find(|d| {*d == payload.device_id}) else {println!("Failed to find device : {}!", payload.device_id); return};
                                                     match payload.command{
                                                         CommandType::TOGGLE => tgt_dev.toggle(),
                                                         CommandType::ENABLE => tgt_dev.activated = true,
