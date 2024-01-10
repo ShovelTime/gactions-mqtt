@@ -9,7 +9,7 @@ pub mod messaging{
     
     use actix_web_actors::ws::{self, WsResponseBuilder};
     use actix::{Actor, StreamHandler, AsyncContext, ActorContext, Handler, WeakAddr};
-    use actix_web::{web, Error, HttpRequest, HttpResponse, http::StatusCode};
+    use actix_web::{web::{self, Bytes}, Error, HttpRequest, HttpResponse, http::StatusCode};
     use chrono::{DateTime, FixedOffset, Local};
     use serde_json::{Map, Value};
     
@@ -31,78 +31,9 @@ pub mod messaging{
             }
             
         }
-    }
-
-    impl Actor for WsConn {
-        type Context = ws::WebsocketContext<Self>;
-    
-        fn started(&mut self, ctx: &mut Self::Context) {
-            println!("WS Connection Opened!");
-            self.self_addr = Some(ctx.address().downgrade());
-            ctx.run_interval(HEARTBEAT_DELAY, |act, ctx| {
-                if Instant::now().duration_since(act.hb) > TIMEOUT_DELAY
-                {
-                    ctx.text("Heartbeat interval has expired! terminating connection.");
-                    ctx.stop();
-                    return;
-                }
-                ctx.ping(b"ping");
-                
-            });
-
-            ctx.text(serde_json::to_string(&WsMessage::device_list(DEVICE_CONTAINER.read().unwrap().values().flatten().collect()).unwrap()).unwrap());
-            //TODO: Fix sending Scenario List
-            
-                
-            
-        }
-        
-        fn stopped(&mut self , ctx: &mut Self::Context)
+        fn handle_payload(&mut self, bytes : Bytes, ctx : &mut <Self as Actor>::Context)
         {
-            println!("WS connection has been terminated!");
-            let mut lock = CONN_LIST.write().expect("conn lock is poisoned!");
-            let Some(addr_pos) = lock.iter().position(|x| *x == self.self_addr.clone().unwrap_or(ctx.address().downgrade())) else 
-            {return}; // I dont know how that got created without getting into the list but alright.
-            lock.swap_remove(addr_pos); // we really dont care about the order so we can take the
-            // small performance improvement
-        } 
-    }
-    
-    impl Handler<WsMessage> for WsConn{
-        type Result = Result<(), serde_json::Error>;
-
-        fn handle(&mut self, msg: WsMessage, ctx: &mut Self::Context) -> Self::Result {
-            let res = serde_json::to_string(&msg);
-            match res{
-                Ok(msg_str) => {
-                    ctx.text(msg_str);
-                    return Ok(())
-                },
-                Err(err) => return Err(err),
-            }
-        }
-            
-   
-        
-    }
-
-
-    impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsConn {
-        fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
-            match msg {
-                Ok(res) => {
-                    match res {
-                        ws::Message::Ping(msg) => {
-                            self.hb = Instant::now();
-                            ctx.pong(&msg)
-                        },
-                        ws::Message::Pong(_) =>
-                        {
-                            self.hb = Instant::now();
-                        }
-                        ws::Message::Binary(bytes)=> {
-                            
-                            let dat_slice: &[u8] = bytes.deref();
+                        let dat_slice: &[u8] = bytes.deref();
                             match serde_json::from_slice::<WsMessage>(dat_slice)
                             {
                                 Ok(wsmsg) => {
@@ -252,13 +183,89 @@ pub mod messaging{
                                 }
                             }
 
+
+        }
+    }
+
+    impl Actor for WsConn {
+        type Context = ws::WebsocketContext<Self>;
+    
+        fn started(&mut self, ctx: &mut Self::Context) {
+            println!("WS Connection Opened!");
+            self.self_addr = Some(ctx.address().downgrade());
+            ctx.run_interval(HEARTBEAT_DELAY, |act, ctx| {
+                if Instant::now().duration_since(act.hb) > TIMEOUT_DELAY
+                {
+                    ctx.text("Heartbeat interval has expired! terminating connection.");
+                    ctx.stop();
+                    return;
+                }
+                ctx.ping(b"ping");
+                
+            });
+
+            ctx.text(serde_json::to_string(&WsMessage::device_list(DEVICE_CONTAINER.read().unwrap().values().flatten().collect()).unwrap()).unwrap());
+            //TODO: Fix sending Scenario List
+            
+                
+            
+        }
+        
+        fn stopped(&mut self , ctx: &mut Self::Context)
+        {
+            println!("WS connection has been terminated!");
+            let mut lock = CONN_LIST.write().expect("conn lock is poisoned!");
+            let Some(addr_pos) = lock.iter().position(|x| *x == self.self_addr.clone().unwrap_or(ctx.address().downgrade())) else 
+            {return}; // I dont know how that got created without getting into the list but alright.
+            lock.swap_remove(addr_pos); // we really dont care about the order so we can take the
+            // small performance improvement
+        } 
+    }
+    
+    impl Handler<WsMessage> for WsConn{
+        type Result = Result<(), serde_json::Error>;
+
+        fn handle(&mut self, msg: WsMessage, ctx: &mut Self::Context) -> Self::Result {
+            let res = serde_json::to_string(&msg);
+            match res{
+                Ok(msg_str) => {
+                    ctx.text(msg_str);
+                    return Ok(())
+                },
+                Err(err) => return Err(err),
+            }
+        }
+            
+   
+        
+    }
+
+
+    impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsConn {
+        fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
+            match msg {
+                Ok(res) => {
+                    match res {
+                        ws::Message::Ping(msg) => {
+                            self.hb = Instant::now();
+                            ctx.pong(&msg)
+                        },
+                        ws::Message::Pong(_) =>
+                        {
+                            self.hb = Instant::now();
+                        }
+                        ws::Message::Binary(bytes)=> {
+                            self.handle_payload(bytes, ctx);
                         },
                         ws::Message::Continuation(_cont) => todo!(), 
                         ws::Message::Close(opt) =>
                         {
                             ctx.close(opt)
                         }
-                        ws::Message::Text(_text) => todo!(),
+                        ws::Message::Text(text) => {
+                            self.handle_payload(text.as_bytes().clone(), ctx);
+
+                        },
                         ws::Message::Nop => (), // Wat
                     }
                 }
@@ -282,6 +289,8 @@ pub mod messaging{
         }
 
     }
+
+
 
 }
 
