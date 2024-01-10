@@ -33,8 +33,8 @@ pub mod messaging{
         }
         fn handle_payload(&mut self, bytes : Bytes, ctx : &mut <Self as Actor>::Context)
         {
-                        println!("message received!");
-                        let dat_slice: &[u8] = bytes.deref();
+                            let dat_slice: &[u8] = bytes.deref();
+                            println!("message received! \n {:?}", serde_json::to_string(dat_slice).unwrap());
                             match serde_json::from_slice::<WsMessage>(dat_slice)
                             {
                                 Ok(wsmsg) => {
