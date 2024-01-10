@@ -199,7 +199,6 @@ fn handle_message_async(_client: &AsyncClient, recv_message : Option<Message>)
         return;
     };
     let msg_type = msg.properties().get_string(paho_mqtt::PropertyCode::ContentType).unwrap_or("unknown".to_string());
-    println!("we are so in lads");
                 
     match msg_type.as_str()
     {
@@ -208,7 +207,7 @@ fn handle_message_async(_client: &AsyncClient, recv_message : Option<Message>)
             let mqtt_update  = serde_json::from_slice(&msg.payload());
             match mqtt_update
             {
-                Ok(dev_list) => {update_device(dev_list); println!("Recieved Device Update")},
+                Ok(dev_list) => {update_device(dev_list)},
 
                 Err(err) =>
                 {
