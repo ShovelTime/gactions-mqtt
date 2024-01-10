@@ -4,9 +4,9 @@ pub mod scenarios
 
     
     use serde_json::{Value, Map};
-    use tokio::time::{sleep_until, Instant, Duration};
+    use tokio::{time::{sleep_until, Instant, Duration}, sync::mpsc::UnboundedSender};
 
-    use crate::{net::{client::{ws_conn::messaging::send_ws_message, ws_msg::ws_msg::WsMessage}, device_update::device_updates::{MQTTUpdate, DeviceUpdateType}}, typedef::typedef::{DeviceId, ScenarioId}, SCENARIO_COUNTER, SCENARIO_LIST, DEVICE_CONTAINER, automatisation::voice_recognition::voice_recognition::ScenarioTypes, MQTT_SENDER};
+    use crate::{net::{client::{ws_conn::messaging::send_ws_message, ws_msg::ws_msg::WsMessage}, device_update::device_updates::{MQTTUpdate, DeviceUpdateType}}, typedef::typedef::{DeviceId, ScenarioId}, SCENARIO_COUNTER, SCENARIO_LIST, DEVICE_CONTAINER, automatisation::voice_recognition::voice_recognition::ScenarioTypes};
 
     pub trait Scenario
     {
@@ -33,6 +33,7 @@ pub mod scenarios
             s_id : usize,
             time_to_trigger: Instant,
             devices: Vec<DeviceId>,
+            tx: UnboundedSender<MQTTUpdate>
                         
     }
     impl Scenario for TimedToggle{
@@ -45,8 +46,9 @@ pub mod scenarios
             let time = self.time_to_trigger.clone();
             let devs = self.devices.clone();
             let s_id = self.get_id();
+            let tx = self.tx.clone();
             tokio::spawn(async move {
-                TimedToggle::start_toggle(time, devs, s_id).await
+                TimedToggle::start_toggle(time, devs, s_id, tx).await
             });
         }
 
@@ -58,7 +60,7 @@ pub mod scenarios
     }
     impl TimedToggle
     {
-        pub fn new(time_to_trigger: Instant, devices: Vec<DeviceId> ) -> ScenarioId 
+        pub fn new(time_to_trigger: Instant, devices: Vec<DeviceId>, tx: UnboundedSender<MQTTUpdate> ) -> ScenarioId 
         {
             let mut n_devices = Vec::new();
             for device in devices
@@ -73,10 +75,11 @@ pub mod scenarios
                 s_id : id,
                 time_to_trigger,
                 devices: n_devices,
+                tx
             }));
             id
             }
-       pub async fn start_toggle(time_to_trigger : Instant, devices : Vec<DeviceId>, s_id : ScenarioId) -> Result<(), ()>
+       pub async fn start_toggle(time_to_trigger : Instant, devices : Vec<DeviceId>, s_id : ScenarioId, tx: UnboundedSender<MQTTUpdate>) -> Result<(), ()>
         {
             
             sleep_until(time_to_trigger).await;
@@ -93,7 +96,7 @@ pub mod scenarios
                         let mut map = Map::<String, Value>::new();
                         map.insert("activated".to_string(), n_activated.to_string().into());
                         let update = MQTTUpdate{ update_type: DeviceUpdateType::ACTIVATION_CHANGE, device_id: device.get_id().to_string(), topic: device.topic.clone(), update_fields: map };
-                        let _ = MQTT_SENDER.read().unwrap().clone().unwrap().send(update);
+                        let _ = tx.send(update);
                         remove_scenario(s_id);
 
                     }
@@ -113,7 +116,8 @@ pub mod scenarios
         sensor_id : DeviceId,
         //sensor : Device,
         treshold : Range<i32>,
-        tgt_dev : DeviceId
+        tgt_dev : DeviceId,
+        tx : UnboundedSender<MQTTUpdate>
 
         
     }
@@ -128,8 +132,9 @@ pub mod scenarios
             let sensor_id = self.sensor_id.clone();
             let tgt_dev = self.tgt_dev.clone();
             let s_id = self.s_id.clone();
+            let tx = self.tx.clone();
             tokio::spawn(async move {
-                ConditionalTrigger::watch(treshold, sensor_id, tgt_dev, s_id).await;
+                ConditionalTrigger::watch(treshold, sensor_id, tgt_dev, s_id, tx).await;
             });
         }
 
@@ -139,7 +144,7 @@ pub mod scenarios
     }
     impl ConditionalTrigger
     {
-        pub fn new(sensor_id : DeviceId, treshold : Range<i32>, tgt_dev: DeviceId) -> Result<usize, &'static str>
+        pub fn new(sensor_id : DeviceId, treshold : Range<i32>, tgt_dev: DeviceId, tx : UnboundedSender<MQTTUpdate>) -> Result<usize, &'static str>
         {
 
             //let dev; 
@@ -159,13 +164,14 @@ pub mod scenarios
                 sensor_id,
                 //sensor: dev,
                 treshold,
-                tgt_dev
+                tgt_dev,
+                tx
             }));
             Ok(id)
                 
         }
 
-        pub async fn watch(treshold: Range<i32>, sensor_id : DeviceId, tgt_dev: DeviceId, s_id : ScenarioId)
+        pub async fn watch(treshold: Range<i32>, sensor_id : DeviceId, tgt_dev: DeviceId, s_id : ScenarioId, tx: UnboundedSender<MQTTUpdate>)
         {
             let mut interval = tokio::time::interval(Duration::from_secs(2));
             loop
@@ -189,7 +195,7 @@ pub mod scenarios
                         let mut map = Map::<String, Value>::new();
                         map.insert("activated".to_string(), n_activated.to_string().into());
                         let update = MQTTUpdate{ update_type: DeviceUpdateType::ACTIVATION_CHANGE, device_id: tgt_dev, topic: tgt.topic.clone(), update_fields: map };
-                        let _ = MQTT_SENDER.read().unwrap().clone().unwrap().send(update);
+                        let _ = tx.send(update);
                         drop(w_lock);
                         remove_scenario(s_id);
                         return;

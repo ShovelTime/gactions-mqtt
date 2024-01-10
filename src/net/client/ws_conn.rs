@@ -112,7 +112,8 @@ pub mod messaging{
                                                                                 {ctx.text(ws_error!("target time cant be before the present!")); return};
                                                                    let Some(time_until) = std::time::Instant::now().checked_add(Duration::from_secs(timestamp)) else 
                                                                                 {ctx.text(ws_error!("Instant got out of range!")); return}; 
-                                                                   let s_id = TimedToggle::new(actix::clock::Instant::from_std(time_until), vec!(id));
+                                                                   let s_id = TimedToggle::new(actix::clock::Instant::from_std(time_until), vec!(id), self.tx.clone());
+
                                                                    let mut s_res = scenario.clone(); 
                                                                    s_res.scenario_id = Some(s_id);
                                                                    s_res.completed = Some(false);
@@ -144,7 +145,7 @@ pub mod messaging{
                                                                 range = i32::MIN..s_payload.treshold;
                                                             }
 
-                                                            let res = ConditionalTrigger::new(s_payload.sensor_id, range, s_payload.target_device);
+                                                            let res = ConditionalTrigger::new(s_payload.sensor_id, range, s_payload.target_device, self.tx.clone());
                                                             match res {
                                                                 Ok(s_id) => {
                                                                     let mut s_res = scenario.clone();
