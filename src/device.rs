@@ -2,7 +2,7 @@ pub mod device {
 
     use serde::{Serialize, Deserialize};
 
-    use crate::typedef::typedef::{DeviceId, Topic};
+    use crate::{typedef::typedef::{DeviceId, Topic}, DEVICE_COUNTER};
     use std::{sync::atomic::{AtomicUsize, Ordering}, collections::HashMap};
 
 
@@ -17,7 +17,7 @@ pub mod device {
             DeviceCounters { counters: HashMap::new()}
         }
 
-        pub fn get_num(&self, in_type : DeviceType) -> usize
+        pub fn get_num(&mut self, in_type : DeviceType) -> usize
         {
             if !self.counters.keys().any(|x| *x == in_type)
             {
@@ -25,6 +25,8 @@ pub mod device {
         
             } 
             return self.counters.get(&in_type).unwrap().fetch_add(1,Ordering::SeqCst);   
+        }
+    }
 
 
     #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
@@ -49,7 +51,7 @@ pub mod device {
         pub fn new(device_type: DeviceType, name : String, topic: Topic) -> Device
         {
 
-            ;
+            
             let name : String;
             match device_type
             {
@@ -59,7 +61,7 @@ pub mod device {
                 DeviceType::Light => { name = "Light ".to_string();},
             }
 
-            let device_id = format!( "{} {}", name, DEVICE_COUNTER.get_num(device_type));
+            let device_id = format!( "{} {}", name, DEVICE_COUNTER.lock().unwrap().get_num(device_type));
 
             Device { device_id, device_type, name, connected: true, activated: true, value: None, topic }
         }

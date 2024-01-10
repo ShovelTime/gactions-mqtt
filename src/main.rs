@@ -3,8 +3,8 @@ use device::device::{Device, DeviceCounters};
 use home::scenarios::scenarios::Scenario;
 use net::{simmed::simmed::{simulate_devices, reattempt_connection, reattempt_connection_async}, device_update::device_updates::{MQTTUpdate, MQTTList, MQTTStatus}, client::{ws_conn::messaging::{WsConn, send_ws_message, ws_conn_request}, ws_msg::ws_msg::WsMessage}};
 use once_cell::sync::Lazy;
-use tokio::{net::TcpListener, sync::{broadcast::{*, self}, mpsc::{UnboundedSender, unbounded_channel, UnboundedReceiver}}};
-use std::{sync::{RwLock, Arc, atomic::AtomicUsize}, any::Any, time::Duration};
+use tokio::{net::TcpListener, sync::{broadcast::{*, self}, mpsc::{UnboundedSender, unbounded_channel, UnboundedReceiver}, }};
+use std::{sync::{RwLock, Mutex, Arc, atomic::AtomicUsize}, any::Any, time::Duration};
 use paho_mqtt::{Message, Client, ConnectOptions, AsyncClient, ConnectOptionsBuilder, MessageBuilder, Properties, PropertyCode, Error};
 use crate::{device::device::DeviceType, net::device_update::device_updates::DeviceUpdateType};
 use std::{thread, collections::HashMap};
@@ -24,7 +24,7 @@ pub static CONN_LIST : Lazy<Arc<RwLock<Vec<WeakAddr<WsConn>>>>> = Lazy::new(|| {
 pub static SCENARIO_COUNTER : AtomicUsize = AtomicUsize::new(0); //yes this will eventually
 //crash in a few hundred years, too bad!
 
-pub static DEVICE_COUNTER : Lazy<DeviceCounters> = Lazy::new(|| { DeviceCounters::new()});
+pub static DEVICE_COUNTER : Lazy<Mutex<DeviceCounters>> = Lazy::new(|| { Mutex::new(DeviceCounters::new())});
 pub static SCENARIO_LIST : Lazy<Arc<RwLock<Vec<Box<dyn Scenario + Sync + Send>>>>> = Lazy::new(|| {Arc::new(RwLock::new(Vec::new()))});
 
 pub const MQTT_SENDER : Lazy<Option<UnboundedSender<MQTTUpdate>>> = Lazy::new(|| {None}); 
@@ -42,7 +42,7 @@ async fn main() {
     
     {
         let mut device_hash = device_container.write().expect("Failed to lock device container!, this should never happen");
-        let device1 = Device::new("temp1".to_string(), DeviceType::TempSensor, "Temperature 1".to_string(), "temperature".to_string());
+        let device1 = Device::new(DeviceType::TempSensor, "Temperature 1".to_string(), "temperature".to_string());
         device_hash.insert("temperature".to_string(), Vec::new());
         device_hash.get_mut("temperature").expect("wait litterally how did we panic here").push(device1)
     }
@@ -50,17 +50,14 @@ async fn main() {
     let sim_thread =thread::spawn(move || // Simulated Devices
     {
         let temp_device = Device::new(
-                "Temperature sensor1".to_string(),
                 DeviceType::TempSensor,
                 "Temperature Sensor".to_string(),
                 "temp1".to_string());
         let lux_device = Device::new(
-                "Lux Sensor1".to_string(),
                 DeviceType::LuxSensor,
                 "Lux Sensor".to_string(),
                 "lux1".to_string());
         let lamp_device = Device::new(
-                "Lamp1".to_string(),
                 DeviceType::Light,
                 "Lamp".to_string(),
                 "lamp1".to_string());
