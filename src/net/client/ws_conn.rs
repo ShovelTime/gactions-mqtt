@@ -54,12 +54,15 @@ pub mod messaging{
             
         }
         
-        fn stopped(&mut self , _: &mut Self::Context)
+        fn stopped(&mut self , ctx: &mut Self::Context)
         {
             println!("WS connection has been terminated!");
-        }
-        
-    
+            let mut lock = CONN_LIST.write().expect("conn lock is poisoned!");
+            let Some(addr_pos) = lock.iter().position(|x| *x == self.self_addr.clone().unwrap_or(ctx.address().downgrade())) else 
+            {return}; // I dont know how that got created without getting into the list but alright.
+            lock.swap_remove(addr_pos); // we really dont care about the order so we can take the
+            // small performance improvement
+        } 
     }
     
     impl Handler<WsMessage> for WsConn{
