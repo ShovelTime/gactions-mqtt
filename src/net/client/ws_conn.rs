@@ -14,7 +14,7 @@ pub mod messaging{
     use serde_json::{Map, Value};
     
 
-    use crate::{net::{client::ws_msg::ws_msg::{WsMessage, WsMessageType, PayloadDeviceUpdate, PayloadGetValue, PayloadScenarioUpdate, PayloadScenarioTimedToggle, PayloadDeviceCommand, CommandType, PayloadScenarioSensorConditional}, device_update::device_updates::{MQTTUpdate, DeviceUpdateType}}, home::scenarios::scenarios::{TimedToggle, ConditionalTrigger}, CONN_LIST, ws_error, DEVICE_CONTAINER, automatisation::voice_recognition::voice_recognition::ScenarioTypes, SCENARIO_LIST, MQTT_SENDER};
+    use crate::{net::{client::ws_msg::ws_msg::{WsMessage, WsMessageType, PayloadDeviceUpdate, PayloadGetValue, PayloadScenarioUpdate, PayloadScenarioTimedToggle, PayloadDeviceCommand, CommandType, PayloadScenarioSensorConditional}, device_update::device_updates::{MQTTUpdate, DeviceUpdateType}}, home::scenarios::scenarios::{TimedToggle, ConditionalTrigger}, CONN_LIST, ws_error, DEVICE_CONTAINER, automatisation::voice_recognition::voice_recognition::ScenarioTypes, SCENARIO_LIST, MQTT_SENDER, device::device::Device};
     pub struct WsConn
     {
         hb : Instant,
@@ -44,7 +44,7 @@ pub mod messaging{
                                             match serde_json::from_str::<PayloadDeviceCommand>(&wsmsg.payload){
                                                 Ok(payload) => {
                                                     let Ok(mut map) = DEVICE_CONTAINER.write() else {println!("hashmap poisoned!"); return};
-                                                    let Some(tgt_dev) = map.values_mut().flatten().find(|d| {*d.get_id() == payload.device_id}) else {println!("Failed to find device : {}!", payload.device_id); return};
+                                                    let Some(tgt_dev) = map.values_mut().flatten().find(|d| {*d.get_id() == payload.device_id}) else {println!("Failed to find device : {}!, \n {:?}, \n {:?}", payload.device_id, payload, map.values().flatten().collect::<Vec<&Device>>()); return};
                                                     match payload.command{
                                                         CommandType::TOGGLE => tgt_dev.toggle(),
                                                         CommandType::ENABLE => tgt_dev.activated = true,
