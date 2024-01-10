@@ -320,6 +320,7 @@ fn add_to_device_list(m_list : MQTTList)
                 {
                     let vec = vec!(x.clone());
                     list.insert(x.topic.clone(), vec);
+
                 }
                 
                 send_ws_message( WsMessage::device_list(list.values().flatten().collect()).expect("Damn list didnt properly serialize"));

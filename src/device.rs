@@ -55,10 +55,10 @@ pub mod device {
             let name : String;
             match device_type
             {
-                DeviceType::TempSensor => { name = "Temp ".to_string(); },
+                DeviceType::TempSensor => { name = "Temp".to_string(); },
 
-                DeviceType::LuxSensor => { name = "Lux ".to_string(); },
-                DeviceType::Light => { name = "Light ".to_string();},
+                DeviceType::LuxSensor => { name = "Lux".to_string(); },
+                DeviceType::Light => { name = "Light".to_string();},
             }
 
             let device_id = format!( "{} {}", name, DEVICE_COUNTER.lock().unwrap().get_num(device_type));
