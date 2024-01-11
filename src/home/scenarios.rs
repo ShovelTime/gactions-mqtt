@@ -176,7 +176,7 @@ pub mod scenarios
 
         pub async fn watch(treshold: Range<i32>, sensor_id : DeviceId, tgt_dev: DeviceId, s_id : ScenarioId, tx: UnboundedSender<MQTTUpdate>)
         {
-            let mut interval = tokio::time::interval(Duration::from_secs(2));
+            let mut interval = tokio::time::interval(Duration::from_millis(1));
             loop
             {
                 interval.tick().await;
@@ -198,6 +198,7 @@ pub mod scenarios
                         let mut map = Map::<String, Value>::new();
                         map.insert("activated".to_string(), n_activated.to_string().into());
                         let update = MQTTUpdate{ update_type: DeviceUpdateType::ACTIVATION_CHANGE, device_id: tgt_dev, topic: tgt.topic.clone(), update_fields: map };
+                        send_ws_message(WsMessage::device_update(tgt).unwrap());
                         let _ = tx.send(update);
                         drop(w_lock);
                         remove_scenario(s_id);

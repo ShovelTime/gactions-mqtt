@@ -146,9 +146,16 @@ pub mod messaging{
                                                             }
 
                                                             let res = ConditionalTrigger::new(s_payload.sensor_id, range, s_payload.target_device, self.tx.clone());
+                                                    
                                                             match res {
                                                                 Ok(s_id) => {
                                                                     let mut s_res = scenario.clone();
+                                                                    let lock = SCENARIO_LIST.read().unwrap();
+                                                                    let s = lock.iter().find(|x| x.get_id() == s_id);
+                                                                    if s.is_some()
+                                                                    {
+                                                                        s.unwrap().start();
+                                                                    }
                                                                     s_res.scenario_id = Some(s_id);
                                                                     s_res.completed = Some(false);
                                                                     
