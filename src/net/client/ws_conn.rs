@@ -219,6 +219,8 @@ pub mod messaging{
             });
 
             ctx.text(serde_json::to_string(&WsMessage::device_list(DEVICE_CONTAINER.read().unwrap().values().flatten().collect()).unwrap()).unwrap());
+            ctx.text(serde_json::to_string(&WsMessage::scenario_list().unwrap()).unwrap())
+            
             //TODO: Fix sending Scenario List
             
                 

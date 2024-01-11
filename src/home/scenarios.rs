@@ -8,7 +8,8 @@ pub mod scenarios
 
     use crate::{net::{client::{ws_conn::messaging::send_ws_message, ws_msg::ws_msg::WsMessage}, device_update::device_updates::{MQTTUpdate, DeviceUpdateType}}, typedef::typedef::{DeviceId, ScenarioId}, SCENARIO_COUNTER, SCENARIO_LIST, DEVICE_CONTAINER, automatisation::voice_recognition::voice_recognition::ScenarioTypes};
 
-    pub trait Scenario
+  
+    pub trait Scenario 
     {
         fn get_id(&self) -> usize;
         fn start(&self);
@@ -28,6 +29,8 @@ pub mod scenarios
             self.get_id() == other.get_id()
         }
     }
+
+    #[derive(Clone)]
     pub struct TimedToggle
     {
             s_id : usize,
@@ -108,8 +111,8 @@ pub mod scenarios
             Ok(())
         }
 
-    }
-    
+    } 
+    #[derive(Clone)]
     pub struct ConditionalTrigger
     {
         s_id : usize,

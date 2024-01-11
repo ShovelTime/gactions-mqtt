@@ -15,7 +15,7 @@ pub mod ws_msg
     use actix::Message;
     use serde::{Serialize, Deserialize};
 
-    use crate::{device::device::Device, automatisation::voice_recognition::voice_recognition::ScenarioTypes, typedef::typedef::DeviceId};
+    use crate::{device::device::Device, automatisation::voice_recognition::voice_recognition::ScenarioTypes, typedef::typedef::DeviceId, SCENARIO_LIST};
 
     #[derive(Serialize, Deserialize, Debug, Message, Clone)]
     #[rtype(result = "Result<(), serde_json::Error>")]
@@ -75,6 +75,21 @@ pub mod ws_msg
                 
             }
 
+        }
+
+        pub fn scenario_list() -> Result<WsMessage, serde_json::Error>
+        { 
+            let vec : Vec<PayloadScenarioUpdate> = SCENARIO_LIST.read().unwrap().iter().map(|x| {PayloadScenarioUpdate{
+                scenario_type: x.get_type(),
+                scenario_id: Some(x.get_id()),
+                completed: Some(false),
+                scenario_payload: "".to_string(),
+            }}).collect();
+            let payload = serde_json::to_string(&vec).unwrap();
+            return Ok(WsMessage {
+                message_type: WsMessageType::SCENARIO_LIST,
+                payload
+            });
         }
 
         
